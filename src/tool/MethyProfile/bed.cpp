@@ -297,13 +297,13 @@ void BED::setValuePfNode(char *&pgoback, char *&pID, ProfileNode *&pPfN)
 {
     pPfN->chr=atoi(pgoback);
     pgoback=goFrontItem(pgoback, 3);
-    if(!pgoback) exit(64);
+    if(!pgoback) exit(0x0F0001);
     pPfN->Start=atoll(pgoback);
     pgoback=goFrontItem(pgoback, 1);
-    if(!pgoback) exit(64);
+    if(!pgoback) exit(0x0F0002);
     pPfN->End=atoll(pgoback);
     pgoback=goFrontItem(pgoback, 2);
-    if(!pgoback) exit(64);
+    if(!pgoback) exit(0x0F0003);
     pPfN->chain=((*pgoback)=='+');
     pgoback=pID;
     for(int j=0;j<SEARCH_RANGE;j++, pID++)
@@ -333,13 +333,25 @@ char *BED::goFrontItem(char *p, int n)
 BED::BED()
 {
     pThis= this;
+    if(pthread_mutex_init(&mutex,NULL)!=0)
+    {
+        perror("pthread_mutex_init:");
+        exit(0x011111);
+    }
 }
 
 BED::BED(char* bedfile)
 {
     pThis= this;
+    if(pthread_mutex_init(&mutex,NULL)!=0)
+    {
+        perror("pthread_mutex_init:");
+        exit(0x011111);
+    }
     for(auto & i : chrList)
         i={(unsigned long)-1,0};
+    if(bedfile== nullptr)
+        bedfile="test.bed";
     strcpy(bedname,bedfile);
     bedfileOpen(bedfile);
 }
@@ -350,14 +362,14 @@ void BED::bedfileOpen(char *& bedfile)
     if((fileHandle = open(bedfile, O_RDWR)) < 0)
     {
         perror("open()") ;
-        exit(1);
+        exit(0x010001);
     }
 
     // Get file stat
     if((fstat(fileHandle, &sb)) == -1 )
     {
         perror("fstat()") ;
-        exit(1);
+        exit(0x010002);
     }
 
     // Map file in memory
@@ -365,7 +377,7 @@ void BED::bedfileOpen(char *& bedfile)
     if(mapped == (char*)-1)
     {
         perror("mmap") ;
-        exit(1);
+        exit(0x010003);
     }
 }
 
@@ -377,6 +389,7 @@ void BED::bedfileClose()
 
 BED::~BED()
 {
+    pthread_mutex_destroy(&mutex);
     bedfileClose();
 }
 
@@ -555,7 +568,7 @@ void BED::savechrList()
     if(!out.is_open())
     {
         perror("ofstream: ") ;
-        exit(2);
+        exit(0x00000A);
     }
     out << "# chr base  length" << endl;
     for(int i=1;i<128;i++)
@@ -571,26 +584,20 @@ void BED::processProfile(char *&gff3file)
     if((indexHandle = open(gff3file, O_RDWR)) < 0)
     {
         perror("gff3 open()") ;
-        exit(2);
+        exit(0x011001);
     }
 
     if((fstat(indexHandle, &sbIndex)) == -1 )
     {
         perror("gff3 fstat()") ;
-        exit(2);
+        exit(0x011002);
     }
 
     mappedIndex = (char*)mmap(nullptr, sbIndex.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, indexHandle, 0);
     if(mappedIndex == (char*)-1)
     {
         perror("gff3 mmap") ;
-        exit(2);
-    }
-
-    if(pthread_mutex_init(&mutex,NULL)!=0)
-    {
-        perror("pthread_mutex_init:");
-        exit(2);
+        exit(0x011003);
     }
     // Build up profile list
 
@@ -659,7 +666,6 @@ void BED::processProfile(char *&gff3file)
             pthread_join(pth[i], nullptr);
     }
 
-    pthread_mutex_destroy(&mutex);
     munmap(mappedIndex,sbIndex.st_size);
     close(indexHandle);
 }
@@ -670,7 +676,7 @@ void BED::saveProfile(char *nameProfile)
     if(fout== nullptr)
     {
         perror("fopen(): ");
-        exit(2);
+        exit(0x00000B);
     }
     fprintf(fout,"chr\tID\tStart\tEnd\tStrand\tMethy_ratio\n");
     for(int i=0;i<geneNum;i++)

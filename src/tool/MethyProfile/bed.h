@@ -6,7 +6,7 @@
 #define UNTITLED_BED_H
 
 #include <sys/stat.h>
-#include <linux/limits.h>
+#include <limits.h>
 #include <indicators/progress_bar.hpp>
 #include <indicators/cursor_control.hpp>
 
