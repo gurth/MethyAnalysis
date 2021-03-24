@@ -3,7 +3,6 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/MethyProfile.iml" filepath="$PROJECT_DIR$/.idea/MethyProfile.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/methyprofile.iml" filepath="$PROJECT_DIR$/.idea/methyprofile.iml" />
     </modules>
   </component>
 </project>
