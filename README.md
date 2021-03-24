@@ -1,2 +1,2 @@
 # MethyAnalysis
-Genome methylation data analysis tool sets.
+MethyAnalysis are genome methylation data analysis tool sets.
