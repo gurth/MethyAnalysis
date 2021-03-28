@@ -9,6 +9,6 @@ int main(int argc,char **argv)
     BED bedfile(argv[1]);
     bedfile.process(nullptr, Method::tag);
     bedfile.savechrList();
-    bedfile.process(argv[2], nullptr, Method::profile);
+    bedfile.process(argv[2], argv[3], Method::profile);
     return 0;
 }

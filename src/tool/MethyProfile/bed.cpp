@@ -10,7 +10,7 @@
 #include<stdlib.h>
 #include <string.h>
 #include<unistd.h>
-#include<error.h>
+//#include<error.h>
 #include <time.h>
 #include <vector>
 #include <string>
@@ -38,8 +38,8 @@ BED* BED::pThis = nullptr;
 
 void BED::dichotomySearchChr(char* m_beg, char* m_end)
 {
-    int chrBeg=atoi(m_beg+3);
-    int chrEnd=atoi(m_end+3);
+    int chrBeg=atoiChr(m_beg+3);
+    int chrEnd=atoiChr(m_end+3);
 
     if(chrBeg!=chrEnd)
     {
@@ -75,14 +75,14 @@ void BED::dichotomySearchChr(char* m_beg, char* m_end)
 
 void BED::dichotomySearchOffset(char *m_beg, char *m_end, char*& ppos, unsigned long pos, bool isBeg)
 {
-    int pos_beg=atoi(goFrontItem(m_beg, 2));
-    int pos_end=atoi(goFrontItem(m_end, 1));
+    int pos_beg=atoiChr(goFrontItem(m_beg, 2));
+    int pos_end=atoiChr(goFrontItem(m_end, 1));
     char* p=(char*)(size_t)(((size_t)m_beg + (size_t)m_end) >> 1);
     for(int j=0; j<SEARCH_RANGE;j++, p--)
         if(*(p)=='\n') break;
     p++;
-    int pos_mid_beg=atoi(goFrontItem(p, 1));
-    int pos_mid_end=atoi(goFrontItem(p, 2));
+    int pos_mid_beg=atoiChr(goFrontItem(p, 1));
+    int pos_mid_end=atoiChr(goFrontItem(p, 2));
     if(p>m_beg)
     {
         if(pos_beg <= pos && pos <= pos_mid_beg)
@@ -97,8 +97,8 @@ void BED::dichotomySearchOffset(char *m_beg, char *m_end, char*& ppos, unsigned 
         p++;
         if(p < m_end)
         {
-            pos_mid_beg=atoi(goFrontItem(p, 1));
-            pos_mid_end=atoi(goFrontItem(p, 2));
+            pos_mid_beg=atoiChr(goFrontItem(p, 1));
+            pos_mid_end=atoiChr(goFrontItem(p, 2));
             if(pos_beg <= pos && pos <= pos_mid_beg)
                 dichotomySearchOffset(m_beg, p, ppos, pos, isBeg);
             if(pos_mid_end <= pos && pos <= pos_end)
@@ -116,6 +116,7 @@ void BED::dichotomySearchOffset(char *m_beg, char *m_end, char*& ppos, unsigned 
 
 void BED::methyMining(ProfileNode *& pGene)
 {
+    if(!(size_t)(pThis->chrList[pGene->chr].base+1)) return;
     // We can think about using a queue to shrink search range
     char* m_beg=pThis->mapped+pThis->chrList[pGene->chr].base;
     char* m_end=m_beg+pThis->chrList[pGene->chr].length;
@@ -131,6 +132,13 @@ void BED::methyMining(ProfileNode *& pGene)
     dichotomySearchOffset(m_beg,m_end,pGbeg,pGene->Start,true);
     dichotomySearchOffset(m_beg,m_end,pGend,pGene->End,false);
 
+    if(!pGbeg && pGend)
+        pGbeg=m_beg;
+    else if(pGbeg && !pGend)
+        pGend=m_end;
+    else if(!pGbeg && !pGend)
+        return;
+
     size_t depth = 0, mCdep = 0;
     p=pGbeg;
     while(true)
@@ -140,9 +148,9 @@ void BED::methyMining(ProfileNode *& pGene)
         if((*p == '+') & (pGene->chain))
         {
             p=goFrontItem(p, 2);
-            depth+=atoi(p);
+            depth+=atoiChr(p);
             p=goFrontItem(p,1);
-            mCdep+=atoi(p);
+            mCdep+=atoiChr(p);
         }
         for(int j=0;j<SEARCH_RANGE;j++, p++)
             if((*p)=='\n') break;
@@ -286,7 +294,6 @@ void *BED::pthFuncProfileList(void *args)
             }//! if(*(p+1) == '#' && *(p+2) == '#')
         } //! if((*p) == '#')
     }//! for
-
     pThis->progress+=pThis->progUnit;
     pThis->bar.set_progress(pThis->progress);
 
@@ -295,7 +302,7 @@ void *BED::pthFuncProfileList(void *args)
 
 void BED::setValuePfNode(char *&pgoback, char *&pID, ProfileNode *&pPfN)
 {
-    pPfN->chr=atoi(pgoback);
+    pPfN->chr=atoiChr(pgoback);
     pgoback=goFrontItem(pgoback, 3);
     if(!pgoback) exit(0x0F0001);
     pPfN->Start=atoll(pgoback);
@@ -402,6 +409,7 @@ void BED::process(char *gff3file, char *outputfile, Method m)
 {
     clock_t t;
     t=clock();
+    string _outputfile;
 
     switch (m)
     {
@@ -413,9 +421,11 @@ void BED::process(char *gff3file, char *outputfile, Method m)
             break;
         case Method::profile:
             if(!outputfile)
-                outputfile="methy profile.txt";
+                _outputfile=string(bedname)+string(".methyprofile.txt");
+            else
+                _outputfile=outputfile;
             processProfile(gff3file);
-            saveProfile(outputfile);
+            saveProfile(_outputfile.c_str());
             break;
         default:
             break;
@@ -571,11 +581,17 @@ void BED::savechrList()
         exit(0x00000A);
     }
     out << "# chr base  length" << endl;
-    for(int i=1;i<128;i++)
+    for(int i=1;i<MAX_CHR-3;i++)
     {
         if(chrList[i].base + 1)
             out << i << " " << chrList[i].base << " " << chrList[i].length << endl;
     }
+    if(chrList[MAX_CHR-3].base + 1)
+        out << "ME" << " " << chrList[MAX_CHR-3].base << " " << chrList[MAX_CHR-3].length << endl;
+    if(chrList[MAX_CHR-2].base + 1)
+        out << "X" << " " << chrList[MAX_CHR-2].base << " " << chrList[MAX_CHR-2].length << endl;
+    if(chrList[MAX_CHR-1].base + 1)
+        out << "Y" << " " << chrList[MAX_CHR-1].base << " " << chrList[MAX_CHR-1].length << endl;
     out.close();
 }
 
@@ -670,7 +686,7 @@ void BED::processProfile(char *&gff3file)
     close(indexHandle);
 }
 
-void BED::saveProfile(char *nameProfile)
+void BED::saveProfile(const char *nameProfile)
 {
     FILE* fout=fopen(nameProfile,"w");
     if(fout== nullptr)
@@ -682,9 +698,93 @@ void BED::saveProfile(char *nameProfile)
     for(int i=0;i<geneNum;i++)
     {
         if(abs(profileList[i]->methy_ratio) <= 1e-15) continue;
-        fprintf(fout, "%d\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->chr, profileList[i]->ID,
-                profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
-                profileList[i]->methy_ratio);
+        switch (profileList[i]->chr)
+        {
+            case MAX_CHR-3:
+                fprintf(fout, "ME\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
+                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
+                        profileList[i]->methy_ratio);
+                break;
+            case MAX_CHR-2:
+                fprintf(fout, "X\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
+                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
+                        profileList[i]->methy_ratio);
+                break;
+            case MAX_CHR-1:
+                fprintf(fout, "Y\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
+                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
+                        profileList[i]->methy_ratio);
+                break;
+            default:
+                fprintf(fout, "%d\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->chr, profileList[i]->ID,
+                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
+                        profileList[i]->methy_ratio);
+                break;
+        }
     }
     fclose(fout);
+}
+
+int BED::atoiChr(const char *nptr)
+{
+    if((*nptr)=='M'
+    #ifdef ALLOW_LOWERCASE
+        || (*nptr)=='m'
+    #endif //!ALLOW_LOWERCASE
+    )
+        return MAX_CHR-3;
+    if((*nptr)=='X'
+    #ifdef ALLOW_LOWERCASE
+        || (*nptr)=='x'
+    #endif //!ALLOW_LOWERCASE
+    )
+        return MAX_CHR-2;
+    if((*nptr)=='Y'
+    #ifdef ALLOW_LOWERCASE
+        || (*nptr)=='y'
+    #endif //!ALLOW_LOWERCASE
+    )
+        return MAX_CHR-1;
+
+
+    int c;              /* current char */
+    int total;         /* current total */
+    int sign;           /* if '-', then negative, otherwise positive */
+
+    /* skip whitespace */
+    while ( isspace((int)(unsigned char)*nptr) )
+        ++nptr;
+
+    c = (int)(unsigned char)*nptr++;
+    sign = c;           /* save sign indication */
+    if (c == '-' || c == '+')
+        c = (int)(unsigned char)*nptr++;    /* skip sign */
+
+    total = 0;
+
+    while (isdigit(c)) {
+        total = 10 * total + (c - '0');     /* accumulate digit */
+        c = (int)(unsigned char)*nptr++;    /* get next char */
+    }
+
+    if (sign == '-')
+        return -total;
+    else
+        return total;   /* return result, negated if necessary */
+}
+
+bool BED::isspace(int x)
+{
+    if(x==' '||x=='\t'||x=='\n'||x=='\f'||x=='\b'||x=='\r')
+        return true;
+    else
+        return false;
+}
+
+bool BED::isdigit(int x)
+{
+    if(x<='9'&&x>='0')
+        return true;
+    else
+        return false;
 }

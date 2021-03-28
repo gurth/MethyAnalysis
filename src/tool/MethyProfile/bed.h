@@ -13,11 +13,14 @@
 namespace bed
 {
 
+    //#define ALLOW_LOWERCASE
+
     #define MAXTHREAD 16
     #define SEARCH_RANGE 512
     #define SEARCH_RANGE_INDEX 102400  // 100 K
 
     #define MAX_GENE 65536
+    #define MAX_CHR 128
 
     #define PROC_GENE_SIZE 0x80
     #define PROC_GENE_READ 0x800
@@ -92,7 +95,7 @@ namespace bed
         int indexHandle = -1;
         std::vector<BlockListNode>blockList;
         std::vector<BlockListNode>blockListIndex;
-        BlockListNode chrList[128];
+        BlockListNode chrList[MAX_CHR];
         ProfileNode* profileList[MAX_GENE]={nullptr};
         pthread_mutex_t mutex;
     private:
@@ -109,6 +112,9 @@ namespace bed
         static inline char* goFrontItem(char* p, int n);
         static inline void setValuePfNode(char*&pgoback, char*& pID, ProfileNode*& pPfN);
         static inline void methyMining(ProfileNode*& pGene);
+        static int atoiChr(const char *nptr);
+        static bool isspace(int x);
+        static bool isdigit(int x);
     public:
         static BED* pThis;
     public:
@@ -119,7 +125,7 @@ namespace bed
         void process(char* outputfile, Method m);
         void process(char* gff3file, char* outputfile, Method m);
         void savechrList();
-        void saveProfile(char* nameProfile);
+        void saveProfile(const char* nameProfile);
         ~BED();
     };
 
