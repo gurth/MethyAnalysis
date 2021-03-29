@@ -6,8 +6,8 @@
 // follow the rules.
 //
 
-#ifndef UNTITLED_CONFIG_H
-#define UNTITLED_CONFIG_H
+#ifndef METHYPROFILE_CONFIG_H
+#define METHYPROFILE_CONFIG_H
 
 //#define ALLOW_LOWERCASE
 
@@ -87,4 +87,4 @@
 #define SHOW_PROGRESSBAR
 /* Show the progress bar. */
 
-#endif //UNTITLED_CONFIG_H
+#endif //!METHYPROFILE_CONFIG_H

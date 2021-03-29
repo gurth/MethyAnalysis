@@ -5,8 +5,8 @@
 // valuable pThis will be destroyed.
 //
 
-#ifndef UNTITLED_BED_H
-#define UNTITLED_BED_H
+#ifndef METHYPROFILE_BED_H
+#define METHYPROFILE_BED_H
 
 #include <sys/stat.h>
 #include <limits.h>
@@ -202,4 +202,4 @@ namespace bed
     };
 
 }
-#endif //!UNTITLED_BED_H
+#endif //!METHYPROFILE_BED_H
