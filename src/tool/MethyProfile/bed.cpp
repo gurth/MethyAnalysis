@@ -218,9 +218,12 @@ void *BED::pthFuncTag(void *args)
     p++;
 
     dichotomySearchChr(q, p);
-
-    pThis->progress+=pThis->progUnit;
-    pThis->bar.set_progress(pThis->progress);
+    MUTEX_LOCK(
+        pThis->progress+=pThis->progUnit;
+        pThis->bar.set_progress(pThis->progress);
+        ,
+        pThis->mutex
+    )
     pthread_exit(nullptr);
 }
 
@@ -274,7 +277,6 @@ void *BED::pthFuncProfile(void *args)
             ,
             pThis->mutex
         )
-
     }
 
     pthread_exit(nullptr);
@@ -449,6 +451,8 @@ void BED::process(char *gff3file, char *outputfile, Method m)
     clock_t t;
     t=clock();
     string _outputfile;
+
+    show_console_cursor(false);
 
     switch (m)
     {
@@ -677,7 +681,7 @@ void BED::processProfile(char *&gff3file)
 
     sprintf(buff,"Indexing");
     bar.set_option(indicators::option::PostfixText{buff});
-    pThis->bar.set_progress(0);
+    bar.set_progress(0);
     progress=0;
 
     readNum=sbIndex.st_size / BLOCK_READ_INDEX;

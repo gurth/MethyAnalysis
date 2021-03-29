@@ -10,7 +10,7 @@
 
 #include <sys/stat.h>
 #include <limits.h>
-#include <indicators/progress_bar.hpp>
+#include <indicators/block_progress_bar.hpp>
 #include <indicators/cursor_control.hpp>
 
 namespace bed
@@ -59,14 +59,14 @@ namespace bed
         int geneNum = 0;                /* Sum of gene number. */
         double progress = 0.0f;         /* Processing progress. */
         double progUnit=0.0f;           /* Progress unit. */
-        indicators::ProgressBar bar     /* Progress bar. For details, please refer to
+        indicators::BlockProgressBar bar     /* Progress bar. For details, please refer to
                                         * https://github.com/p-ranav/indicators.*/
         {
             indicators::option::BarWidth{50},
             indicators::option::Start{"["},
-            indicators::option::Fill{"■"},
-            indicators::option::Lead{"■"},
-            indicators::option::Remainder{" "},
+            //indicators::option::Fill{"■"},
+            //indicators::option::Lead{"■"},
+            //indicators::option::Remainder{" "},
             indicators::option::End{"]"},
             indicators::option::PrefixText{"Progress: "},
             indicators::option::ForegroundColor{indicators::Color::green},
