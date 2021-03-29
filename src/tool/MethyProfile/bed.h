@@ -1,5 +1,8 @@
 //
 // Created by gurth on 3/11/21.
+// This file define a class bed which realize the main function of the program.
+// Please ensure only one bed progress can be run at a time, otherwise, static
+// valuable pThis will be destroyed.
 //
 
 #ifndef UNTITLED_BED_H
@@ -12,74 +15,52 @@
 
 namespace bed
 {
+    #include "config.h"
 
-    //#define ALLOW_LOWERCASE
-
-    #define MAXTHREAD 16
-    #define SEARCH_RANGE 512
-    #define SEARCH_RANGE_INDEX 102400  // 100 K
-
-    #define MAX_GENE 65536
-    #define MAX_CHR 128
-
-    #define PROC_GENE_SIZE 0x80
-    #define PROC_GENE_READ 0x800
-
-    //#define _FLAG_TEST
-
-    #ifdef _FLAG_TEST
-
-        #define TEST_CHAR 'G'
-        #define BLOCK_SIZE 0x4000000 // 64 M
-        #define BLOCK_READ  0x40000000 // 1 G
-
-    #else
-
-        #define BLOCK_SIZE 0x400000 // 4 M
-        #define BLOCK_READ  0x4000000 // 64 M
-
-    #endif //!_FLAG_TEST
-
-    #define BLOCK_SIZE_INDEX 0x80000 // 512 K
-    #define BLOCK_READ_INDEX 0x800000 // 4 M
-
-    //#define SHOW_ALL_INFO
-    #define SHOW_PROGRESSBAR
+    #define MUTEX_LOCK(__CODE, __MUTEX)  pthread_mutex_lock(&__MUTEX); \
+        __CODE \
+        pthread_mutex_unlock(&__MUTEX);                                                               \
+    /* Lock and unlock __CODE in thread function. */
 
     enum class Method {raw, tag, profile};
+    /*  Define the operation method. */
 
     struct BlockListNode
+            /* Block list item structure. Show the block's information. */
     {
-        unsigned long base=0;
-        unsigned long length=0;
+        unsigned long base=0;   /* Base offset of the block. */
+        unsigned long length=0; /* Length of the block. */
     };
 
     struct ProfileNode
+            /* Profile list item structure. Show the information of genes (or other
+             * items in gff3 file such as exon). */
     {
-        char ID[0x20] = {0};
-        int chr = 0;
-        bool chain = -1;
+        char ID[0x20] = {0};        /* ID of the gene. */
+        int chr = 0;                /* The chromosome where the gene is located. */
+        bool chain = -1;            /* Positive chain or negative chain. */
         unsigned long Start= 0;
-        unsigned long End= 0;
-        double methy_ratio = 0.0f;
+        unsigned long End= 0;       /* Location on chromosome. */
+        double methy_ratio = 0.0f;  /* Methylation ratio of this gene. */
     };
 
     class BED
     {
     private:
-        char bedname[NAME_MAX];
-        char *mapped= nullptr;
-        char *mappedIndex = nullptr;
-        unsigned long base_offset=0;
-        unsigned long sum =0;
-        struct stat sb{};
-        struct stat sbIndex{};
-        int threadNum = 0;
-        int nodeNum = 0;
-        int geneNum = 0;
-        double progress = 0.0f;
-        double progUnit=0.0f;
-        indicators::ProgressBar bar
+        char bedname[NAME_MAX];         /* Bed file name. */
+        char *mapped= nullptr;          /* Bed file mapped location. */
+        char *mappedIndex = nullptr;    /* GFF3 file mapped location. */
+        unsigned long base_offset=0;    /* Base offset of every loop. */
+        unsigned long sum =0;           /* Sum of bytes which have processed. */
+        struct stat sb{};               /* Attributes of bed file. */
+        struct stat sbIndex{};          /* Attributes of gff3 file. */
+        int threadNum = 0;              /* Thread number per loop. */
+        int nodeNum = 0;                /* First node number which is pending process. */
+        int geneNum = 0;                /* Sum of gene number. */
+        double progress = 0.0f;         /* Processing progress. */
+        double progUnit=0.0f;           /* Progress unit. */
+        indicators::ProgressBar bar     /* Progress bar. For details, please refer to
+                                        * https://github.com/p-ranav/indicators.*/
         {
             indicators::option::BarWidth{50},
             indicators::option::Start{"["},
@@ -91,42 +72,133 @@ namespace bed
             indicators::option::ForegroundColor{indicators::Color::green},
             indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}
         };
-        int fileHandle = -1;
-        int indexHandle = -1;
-        std::vector<BlockListNode>blockList;
-        std::vector<BlockListNode>blockListIndex;
-        BlockListNode chrList[MAX_CHR];
+        int fileHandle = -1;            /* File handle of bed file. */
+        int indexHandle = -1;           /* File handle of gff3 file. */
+        std::vector<BlockListNode>blockList;    /* Block list of bed file. */
+        BlockListNode chrList[MAX_CHR];         /* Chromosome list in the form of blockList. */
         ProfileNode* profileList[MAX_GENE]={nullptr};
-        pthread_mutex_t mutex;
+                                        /* Profile list, you can see ProfileNode definition above. */
+        pthread_mutex_t mutex;          /* Global mutex of thread. */
     private:
         inline void processRaw();
+            /* Process bed file with Method::raw, which means byte manipulation directly.
+             * Always use to test the performance of this program. */
+
         inline void processTag();
+            /* Process bed file and generate chromosome list.
+             * Must run before generation of profile.
+             * You can save chromosome list with savechrList().
+             * Please notice that if you want to import chromosome list from file directly,
+             * make sure the file is named as $(YOUR_BED_FILE_NAME).tag. */
+
         inline void processProfile(char*& gff3file);
+            /* Process bed file and generate profile based on gff3 file.
+             * Only support gff3 format.
+             * The profile can be saved with saveProfile(). */
+
         static void dichotomySearchChr(char* m_beg, char* m_end);
-        static void dichotomySearchOffset(char* m_beg, char* m_end,char*& ppos, unsigned long pos, bool isBeg);
+            /* Search cut-off point between two block of chromosome data in bed file using dichotomy.
+             * m_beg and m_end are the beginning an ending of a block.
+             * Please make sure that m_beg and m_end point to the beginning of a line.
+             * This function will be executed recursively. */
+
+        static void dichotomySearchOffset(char* m_beg, char* m_end, char*& ppos, unsigned long pos, bool isBeg);
+            /* Search interval of a gene in bed file using dichotomy.
+             * This function will be executed recursively.
+             * m_beg and m_end are the beginning an ending of a block.
+             * ppos: The closest entry of bed file which is lower than pos if ifbeg true, or larger if ifbeg false.
+             *       Function will make sure ppos points to the beginning of an entry.
+             * pos: The point pending search.
+             * isBeg: Indicates the beginning of an interval or the ending. */
+
         static void *pthFuncRaw(void *args);
+            /* Thread function.
+             * Implementation of processing bed file with Method::raw.
+             * This function will process the block which is divided form bed file. */
+
         static void *pthFuncTag(void *args);
+            /* Thread function.
+             * Implementation of processing bed file to generate chromosome list.
+             * Make sure block list has been build before.
+             * The block which processing refers to the block list.
+             * */
+
         static void *pthFuncBlockList(void *args);
+            /* Thread function.
+             * Implementation of processing bed file to generate block list.
+             * This function will make sure a block is begin with the beginning of
+             * an entry, and end with the beginning with another entry. */
+
         static void *pthFuncProfileList(void *args);
+            /* Thread function.
+             * Implementation of generation of profile list from gff3 file.
+             * This function can gather basic information of entry in profile.
+             * */
+
         static void *pthFuncProfile(void *args);
+            /* Thread function.
+             * Implementation of fulfill the profile list.
+             * This function can calculate methylation ratio of every entry based on bed file.
+             * */
+
         static inline char* goFrontItem(char* p, int n);
+            /* Reach forward item in a line with item separated by '\t'.
+             * p: The item now;
+             * n: Go to the n_th item forward.
+             * ex:
+             * char* c= "abcd\tefgh\tzzzz\n";
+             * p=c;
+             * p= goFrontItem(p, 2);   // p = "zzzz\n"  */
+
         static inline void setValuePfNode(char*&pgoback, char*& pID, ProfileNode*& pPfN);
+            /* Fulfill an profile entry. */
+
         static inline void methyMining(ProfileNode*& pGene);
+            /* Calculate methylation ratio of a particular entry of profile list. */
+
         static int atoiChr(const char *nptr);
+            /* Extension of atoi() in stdlib which can process chromosome number like X, Y, MT.*/
+
         static bool isspace(int x);
+            /* Determine whether it is a space. Only used in atoiChr(). */
+
         static bool isdigit(int x);
+            /* Determine whether it is a digit. Only used in atoiChr(). */
     public:
         static BED* pThis;
+            /* static pointer points to this class to ensure the thread function can
+             * access data in this class. */
     public:
-        BED();
-        BED(char *bedfile);
-        void bedfileOpen(char*& bedfile);
+        BED();                  /* Constructor without opening and mapping file.*/
+        BED(char *bedfile);     /* Constructor with opening and mapping file.*/
+        void bedfileOpen(const char* bedfile);
+            /* Open bed file an map it to memory. */
+
         void bedfileClose();
+            /* Close bed file unmap it from memory. */
+
         void process(char* outputfile, Method m);
+            /* Main process of this class.
+             * outputfile: Profile will save with outputfile if m is Method::profile.
+             *             Default or in other method this value is nullptr.
+             * m: Process Method.*/
+
         void process(char* gff3file, char* outputfile, Method m);
+            /* Main process of this class.
+             * gff3file: GFF3 file name.
+             * outputfile: Profile will save with outputfile if m is Method::profile.
+             *             Default or in other method this value is nullptr.
+             * m: Process Method.*/
+
         void savechrList();
+            /* Save chromosome list in file as $(YOUR_BED_FILE_NAME).tag.*/
+
         void saveProfile(const char* nameProfile);
-        ~BED();
+            /* Save profile list in file as nameProfile.
+             * If nameProfile == nullptr, profile list will be saved as
+             * $(YOUR_BED_FILE_NAME).methyprofile.txt*/
+
+        ~BED(); /* Call bedfileClose() to deconstruct class. */
     };
 
 }

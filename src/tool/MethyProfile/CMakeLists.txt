@@ -8,6 +8,6 @@ include_directories("./include")
 
 find_package(Threads)
 
-add_executable(methyprofile main.cpp bed.cpp bed.h)
+add_executable(methyprofile main.cpp bed.cpp bed.h config.h)
 
 target_link_libraries(methyprofile ${CMAKE_THREAD_LIBS_INIT})

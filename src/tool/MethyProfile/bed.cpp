@@ -162,7 +162,11 @@ void BED::methyMining(ProfileNode *& pGene)
 
 void *BED::pthFuncRaw(void *args)
 {
-    size_t i = pThis->threadNum++;
+    MUTEX_LOCK(
+            size_t i = pThis->threadNum++;
+            ,
+            pThis->mutex
+    )
     size_t begOffset = pThis->base_offset + i*BLOCK_SIZE;
 
 #ifdef _FLAG_TEST
@@ -187,16 +191,24 @@ void *BED::pthFuncRaw(void *args)
 #ifdef SHOW_PROGRESSBAR
     char buff[0x30];
     sprintf(buff,"Processed %ld / %ld",pThis->sum,pThis->sb.st_size);
-    pThis->progress+=pThis->progUnit;
-    pThis->bar.set_option(indicators::option::PostfixText{buff});
-    pThis->bar.set_progress(pThis->progress);
+    MUTEX_LOCK(
+        pThis->progress+=pThis->progUnit;
+        pThis->bar.set_option(indicators::option::PostfixText{buff});
+        pThis->bar.set_progress(pThis->progress);
+        ,
+        pThis->mutex
+    )
 #endif //!SHOW_PROGRESSBAR
     pthread_exit(nullptr);
 }
 
 void *BED::pthFuncTag(void *args)
 {
-    size_t k= pThis->nodeNum++;
+    MUTEX_LOCK(
+        size_t k= pThis->nodeNum++;
+        ,
+        pThis->mutex
+    )
     size_t begOffset = pThis->blockList[k].base;
     char* q=&(pThis->mapped[begOffset]);
     char* p=&(pThis->mapped[begOffset+pThis->blockList[k].length -1]);
@@ -214,8 +226,12 @@ void *BED::pthFuncTag(void *args)
 
 void *BED::pthFuncBlockList(void *args)
 {
-    size_t i = pThis->threadNum++;
-    size_t k= pThis->nodeNum++;
+    MUTEX_LOCK(
+            size_t i = pThis->threadNum++;
+            size_t k= pThis->nodeNum++;
+            ,
+            pThis->mutex
+    )
     size_t begOffset = pThis->base_offset + i*BLOCK_SIZE;
     int j=0;
 
@@ -227,15 +243,23 @@ void *BED::pthFuncBlockList(void *args)
     }
     pThis->blockList[k].base=begOffset;
 
-    pThis->progress+=pThis->progUnit;
-    pThis->bar.set_progress(pThis->progress);
+    MUTEX_LOCK(
+            pThis->progress+=pThis->progUnit;
+            pThis->bar.set_progress(pThis->progress);
+            ,
+            pThis->mutex
+        )
 
     pthread_exit(nullptr);
 }
 
 void *BED::pthFuncProfile(void *args)
 {
-    size_t i = pThis->threadNum++;
+    MUTEX_LOCK(
+            size_t i = pThis->threadNum++;
+            ,
+            pThis->mutex
+    )
     size_t begOffset = pThis->base_offset + i*PROC_GENE_SIZE;
     size_t length = PROC_GENE_SIZE;
     if(pThis->geneNum - begOffset < PROC_GENE_SIZE)
@@ -244,8 +268,13 @@ void *BED::pthFuncProfile(void *args)
     for(size_t j=0;j<length;j++)
     {
         methyMining(pThis->profileList[begOffset+j]);
-        pThis->progress+=pThis->progUnit;
-        pThis->bar.set_progress(pThis->progress);
+        MUTEX_LOCK(
+            pThis->progress+=pThis->progUnit;
+            pThis->bar.set_progress(pThis->progress);
+            ,
+            pThis->mutex
+        )
+
     }
 
     pthread_exit(nullptr);
@@ -253,7 +282,11 @@ void *BED::pthFuncProfile(void *args)
 
 void *BED::pthFuncProfileList(void *args)
 {
-    size_t i = pThis->threadNum++;
+    MUTEX_LOCK(
+        size_t i = pThis->threadNum++;
+        ,
+        pThis->mutex
+    )
     size_t begOffset = pThis->base_offset + i*BLOCK_SIZE_INDEX;
     size_t length = BLOCK_SIZE_INDEX;
     if(pThis->sbIndex.st_size - begOffset < BLOCK_SIZE_INDEX)
@@ -284,9 +317,11 @@ void *BED::pthFuncProfileList(void *args)
 
                             auto* pfNtmp=(ProfileNode*) malloc(sizeof(ProfileNode));
                             setValuePfNode(pgoback,p,pfNtmp);
-                            pthread_mutex_lock(&pThis->mutex);
-                            pThis->profileList[pThis->geneNum ++]=pfNtmp;
-                            pthread_mutex_unlock(&pThis->mutex);
+                            MUTEX_LOCK(
+                                    pThis->profileList[pThis->geneNum ++]=pfNtmp;
+                                    ,
+                                    pThis->mutex
+                                    )
                             break;
                         }
                     }//!if((*p)=='I')
@@ -294,9 +329,12 @@ void *BED::pthFuncProfileList(void *args)
             }//! if(*(p+1) == '#' && *(p+2) == '#')
         } //! if((*p) == '#')
     }//! for
-    pThis->progress+=pThis->progUnit;
-    pThis->bar.set_progress(pThis->progress);
-
+    MUTEX_LOCK(
+            pThis->progress+=pThis->progUnit;
+            pThis->bar.set_progress(pThis->progress);
+            ,
+            pThis->mutex
+            )
     pthread_exit(nullptr);
 }
 
@@ -358,12 +396,13 @@ BED::BED(char* bedfile)
     for(auto & i : chrList)
         i={(unsigned long)-1,0};
     if(bedfile== nullptr)
-        bedfile="test.bed";
-    strcpy(bedname,bedfile);
-    bedfileOpen(bedfile);
+        strcpy(bedname,"test.bed");
+    else
+        strcpy(bedname,bedfile);
+    bedfileOpen(bedname);
 }
 
-void BED::bedfileOpen(char *& bedfile)
+void BED::bedfileOpen(const char * bedfile)
 {
     // Open file
     if((fileHandle = open(bedfile, O_RDWR)) < 0)
@@ -585,13 +624,24 @@ void BED::savechrList()
     {
         if(chrList[i].base + 1)
             out << i << " " << chrList[i].base << " " << chrList[i].length << endl;
+#ifdef __CHR_CHL
+        if(chrList[MAX_CHR-4].base + 1)
+        out << "CH" << " " << chrList[MAX_CHR-3].base << " " << chrList[MAX_CHR-3].length << endl;
+#endif //!__CHR_CHL
     }
     if(chrList[MAX_CHR-3].base + 1)
         out << "ME" << " " << chrList[MAX_CHR-3].base << " " << chrList[MAX_CHR-3].length << endl;
+#ifdef __CHR_ZW
+    if(chrList[MAX_CHR-2].base + 1)
+        out << "Z" << " " << chrList[MAX_CHR-2].base << " " << chrList[MAX_CHR-2].length << endl;
+    if(chrList[MAX_CHR-1].base + 1)
+        out << "W" << " " << chrList[MAX_CHR-1].base << " " << chrList[MAX_CHR-1].length << endl;
+#else
     if(chrList[MAX_CHR-2].base + 1)
         out << "X" << " " << chrList[MAX_CHR-2].base << " " << chrList[MAX_CHR-2].length << endl;
     if(chrList[MAX_CHR-1].base + 1)
         out << "Y" << " " << chrList[MAX_CHR-1].base << " " << chrList[MAX_CHR-1].length << endl;
+#endif //__CHR_ZW
     out.close();
 }
 
@@ -700,11 +750,30 @@ void BED::saveProfile(const char *nameProfile)
         if(abs(profileList[i]->methy_ratio) <= 1e-15) continue;
         switch (profileList[i]->chr)
         {
+#ifdef __CHR_CHL
+            case MAX_CHR-4:
+                fprintf(fout, "CH\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
+                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
+                        profileList[i]->methy_ratio);
+                break;
+#endif //!__CHR_CHL
             case MAX_CHR-3:
                 fprintf(fout, "ME\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
                         profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
                         profileList[i]->methy_ratio);
                 break;
+#ifdef __CHR_ZW
+            case MAX_CHR-2:
+                fprintf(fout, "Z\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
+                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
+                        profileList[i]->methy_ratio);
+                break;
+            case MAX_CHR-1:
+                fprintf(fout, "W\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
+                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
+                        profileList[i]->methy_ratio);
+                break;
+#else
             case MAX_CHR-2:
                 fprintf(fout, "X\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
                         profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
@@ -715,6 +784,7 @@ void BED::saveProfile(const char *nameProfile)
                         profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
                         profileList[i]->methy_ratio);
                 break;
+#endif //!__CHR_ZW
             default:
                 fprintf(fout, "%d\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->chr, profileList[i]->ID,
                         profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
@@ -727,12 +797,35 @@ void BED::saveProfile(const char *nameProfile)
 
 int BED::atoiChr(const char *nptr)
 {
+#ifdef __CHR_CHL
+    if((*nptr)=='C'
+    #ifdef ALLOW_LOWERCASE
+        || (*nptr)=='c'
+    #endif //!ALLOW_LOWERCASE
+            )
+        return MAX_CHR-4;
+#endif //!__CHR_CHL
+
     if((*nptr)=='M'
     #ifdef ALLOW_LOWERCASE
         || (*nptr)=='m'
     #endif //!ALLOW_LOWERCASE
     )
         return MAX_CHR-3;
+#ifdef __CHR_ZW
+    if((*nptr)=='Z'
+    #ifdef ALLOW_LOWERCASE
+        || (*nptr)=='z'
+    #endif //!ALLOW_LOWERCASE
+            )
+        return MAX_CHR-2;
+    if((*nptr)=='W'
+    #ifdef ALLOW_LOWERCASE
+        || (*nptr)=='w'
+    #endif //!ALLOW_LOWERCASE
+            )
+        return MAX_CHR-1;
+#else
     if((*nptr)=='X'
     #ifdef ALLOW_LOWERCASE
         || (*nptr)=='x'
@@ -745,7 +838,7 @@ int BED::atoiChr(const char *nptr)
     #endif //!ALLOW_LOWERCASE
     )
         return MAX_CHR-1;
-
+#endif //!__CHR_ZW
 
     int c;              /* current char */
     int total;         /* current total */
