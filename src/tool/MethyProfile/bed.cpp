@@ -634,7 +634,7 @@ void BED::savechrList()
 #endif //!__CHR_CHL
     }
     if(chrList[MAX_CHR-3].base + 1)
-        out << "ME" << " " << chrList[MAX_CHR-3].base << " " << chrList[MAX_CHR-3].length << endl;
+        out << "MT" << " " << chrList[MAX_CHR-3].base << " " << chrList[MAX_CHR-3].length << endl;
 #ifdef __CHR_ZW
     if(chrList[MAX_CHR-2].base + 1)
         out << "Z" << " " << chrList[MAX_CHR-2].base << " " << chrList[MAX_CHR-2].length << endl;
@@ -762,7 +762,7 @@ void BED::saveProfile(const char *nameProfile)
                 break;
 #endif //!__CHR_CHL
             case MAX_CHR-3:
-                fprintf(fout, "ME\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
+                fprintf(fout, "MT\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
                         profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
                         profileList[i]->methy_ratio);
                 break;
