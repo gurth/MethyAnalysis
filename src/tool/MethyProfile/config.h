@@ -87,4 +87,6 @@
 #define SHOW_PROGRESSBAR
 /* Show the progress bar. */
 
+#define PROMOTER_LENGTH 2000
+
 #endif //!METHYPROFILE_CONFIG_H

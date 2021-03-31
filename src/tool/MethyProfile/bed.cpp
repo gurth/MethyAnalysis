@@ -218,12 +218,14 @@ void *BED::pthFuncTag(void *args)
     p++;
 
     dichotomySearchChr(q, p);
+#ifdef SHOW_PROGRESSBAR
     MUTEX_LOCK(
         pThis->progress+=pThis->progUnit;
         pThis->bar.set_progress(pThis->progress);
         ,
         pThis->mutex
     )
+#endif //!SHOW_PROGRESSBAR
     pthread_exit(nullptr);
 }
 
@@ -245,14 +247,14 @@ void *BED::pthFuncBlockList(void *args)
         begOffset = begOffset + j + 1;
     }
     pThis->blockList[k].base=begOffset;
-
+#ifdef SHOW_PROGRESSBAR
     MUTEX_LOCK(
             pThis->progress+=pThis->progUnit;
             pThis->bar.set_progress(pThis->progress);
             ,
             pThis->mutex
         )
-
+#endif //!SHOW_PROGRESSBAR
     pthread_exit(nullptr);
 }
 
@@ -271,12 +273,14 @@ void *BED::pthFuncProfile(void *args)
     for(size_t j=0;j<length;j++)
     {
         methyMining(pThis->profileList[begOffset+j]);
+#ifdef SHOW_PROGRESSBAR
         MUTEX_LOCK(
             pThis->progress+=pThis->progUnit;
             pThis->bar.set_progress(pThis->progress);
             ,
             pThis->mutex
         )
+#endif //!SHOW_PROGRESSBAR
     }
 
     pthread_exit(nullptr);
@@ -331,12 +335,14 @@ void *BED::pthFuncProfileList(void *args)
             }//! if(*(p+1) == '#' && *(p+2) == '#')
         } //! if((*p) == '#')
     }//! for
+#ifdef SHOW_PROGRESSBAR
     MUTEX_LOCK(
             pThis->progress+=pThis->progUnit;
             pThis->bar.set_progress(pThis->progress);
             ,
             pThis->mutex
             )
+#endif //!SHOW_PROGRESSBAR
     pthread_exit(nullptr);
 }
 
@@ -493,11 +499,12 @@ void BED::processRaw()
 
     readNum=sb.st_size / BLOCK_READ;
     restSize=sb.st_size % BLOCK_READ;
+#ifdef SHOW_PROGRESSBAR
     progUnit=(double)(100.0 / (sb.st_size / BLOCK_SIZE +1));
     sprintf(buff,"Processed 0 / %ld",sb.st_size);
     bar.set_option(indicators::option::PostfixText{buff});
     bar.set_progress(0);
-
+#endif //!SHOW_PROGRESSBAR
     base_offset=0;
 
     for(int j=0; j<=readNum; j++, base_offset+=BLOCK_READ)
@@ -529,10 +536,11 @@ void BED::processTag()
     char* p= nullptr;
 
     printf("\033[33m[Warning]\033[0m: Start tagging ...\n");
+#ifdef SHOW_PROGRESSBAR
     sprintf(buff,"Building block list");
     bar.set_option(indicators::option::PostfixText{buff});
     bar.set_progress(0);
-
+#endif //!SHOW_PROGRESSBAR
     readNum=sb.st_size / BLOCK_READ;
     restSize=sb.st_size % BLOCK_READ;
     blockList.resize(sb.st_size / BLOCK_SIZE +1);
@@ -578,9 +586,11 @@ void BED::processTag()
             if(*(p)!='\n') break;
     blockList[blockList.size()-1].length=p - mapped - blockList[blockList.size() - 1].base;
 
+#ifdef SHOW_PROGRESSBAR
     sprintf(buff,"Tagging");
     bar.set_option(indicators::option::PostfixText{buff});
     pThis->bar.set_progress(25.0);
+#endif //!SHOW_PROGRESSBAR
 
     nodeNum = 0;
     base_offset=0;
@@ -679,15 +689,16 @@ void BED::processProfile(char *&gff3file)
 
     printf("\033[33m[Warning]\033[0m: Start generating profile ...\n");
 
+#ifdef SHOW_PROGRESSBAR
     sprintf(buff,"Indexing");
     bar.set_option(indicators::option::PostfixText{buff});
     bar.set_progress(0);
     progress=0;
+    progUnit=(double)(25.0 / (sbIndex.st_size / BLOCK_SIZE_INDEX +1));
+#endif //!SHOW_PROGRESSBAR
 
     readNum=sbIndex.st_size / BLOCK_READ_INDEX;
     restSize=sbIndex.st_size % BLOCK_READ_INDEX;
-
-    progUnit=(double)(25.0 / (sbIndex.st_size / BLOCK_SIZE_INDEX +1));
 
     base_offset=0;
 
@@ -714,10 +725,11 @@ void BED::processProfile(char *&gff3file)
     readNum=geneNum / PROC_GENE_READ;
     restSize=geneNum % PROC_GENE_READ;
 
+#ifdef SHOW_PROGRESSBAR
     sprintf(buff,"Processing");
     bar.set_option(indicators::option::PostfixText{buff});
-
     progUnit=(double)((100.0 - progress) / geneNum);
+#endif //!SHOW_PROGRESSBAR
 
     for(int j=0; j<=readNum; j++, base_offset+=PROC_GENE_READ)
     {
