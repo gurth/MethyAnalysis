@@ -94,6 +94,11 @@
  * You can change it if needed. Default to 2000.
  * */
 
+#define ALLOW_PLUG_IN_SAVE   /* Beta */
+/* Define this if you want to use advanced feature of this program to save
+ * profile. If you not sure about this, please ture it down.
+ * */
+
 #define CG_NUMBER
 /* Define this when you want to save CG number in profile.
  * */

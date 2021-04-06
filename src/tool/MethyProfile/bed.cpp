@@ -18,6 +18,10 @@
 #include <algorithm>
 #include "bed.h"
 
+#ifdef ALLOW_PLUG_IN_SAVE
+#include <dlfcn.h>
+#endif //!ALLOW_PLUG_IN_SAVE
+
 using namespace std;
 using namespace bed;
 using namespace indicators;
@@ -821,7 +825,8 @@ void BED::saveProfile(const char *nameProfile)
 #endif //!CG_number
     }
     fprintf(fout,"\n");
-    for(int i=0;i<geneNum;i++) {
+    for(int i=0;i<geneNum;i++)
+    {
         if (abs(profileList[i]->methy_ratio) <= 1e-15) continue;
         string str_chr;
         switch (profileList[i]->chr) {
@@ -867,6 +872,11 @@ void BED::saveProfile(const char *nameProfile)
         }
         fprintf(fout, "\n");
     }
+#ifdef ALLOW_PLUG_IN_SAVE
+    string pli_save_name=nameProfile;
+    pli_save_name+=".m.txt";
+    LoadSavePlugInAndJmp(pli_save_name.c_str());
+#endif //!ALLOW_PLUG_IN_SAVE
     fclose(fout);
 }
 
@@ -930,7 +940,8 @@ int BED::atoiChr(const char *nptr)
 
     total = 0;
 
-    while (isdigit(c)) {
+    while (isdigit(c))
+    {
         total = 10 * total + (c - '0');     /* accumulate digit */
         c = (int)(unsigned char)*nptr++;    /* get next char */
     }
@@ -955,4 +966,24 @@ bool BED::isdigit(int x)
         return true;
     else
         return false;
+}
+
+void BED::LoadSavePlugInAndJmp(const char* foutput)
+{
+    void *handle = dlopen("./etc/libsave.so", RTLD_LAZY);
+    if(!handle)
+    {
+        printf("%s", dlerror());
+        exit(FILE_OPEN_ERROR+0x20);
+    }
+    typedef void (*SaveAs)(const char*, ProfileNode**, int);
+    SaveAs saveas=(SaveAs)dlsym(handle,"ProfileSave");
+    if(!saveas)
+    {
+        printf("%s", dlerror());
+        dlclose(handle);
+        exit(MUTEX_ERROR+0x10);
+    }
+    (*saveas)(foutput, pThis->profileList, pThis->geneNum);
+    dlclose(handle);
 }

@@ -121,6 +121,7 @@ CMakeFiles
 CMakeScripts
 Testing
 Makefile
+!/etc/Makefile
 cmake_install.cma
 install_manifest.txt
 compile_commands.json
