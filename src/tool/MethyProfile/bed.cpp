@@ -118,36 +118,80 @@ void BED::methyMining(ProfileNode *& pGene)
 {
     if(!(size_t)(pThis->chrList[pGene->chr].base+1)) return;
     // We can think about using a queue to shrink search range
+    /* Prepare search range. */
     char* m_beg=pThis->mapped+pThis->chrList[pGene->chr].base;
     char* m_end=m_beg+pThis->chrList[pGene->chr].length;
-    char* pGbeg= nullptr, *pGend= nullptr;
-    char* p= nullptr;
+    double dtemp=0.0f;
 
+    /* Kill empty line before EOF. */
     m_end--;
     while(true){if((*m_end)!='\n') break; m_end--;}
     for(int j=0; j<SEARCH_RANGE;j++, m_end--)
         if(*(m_end)=='\n') break;
     m_end++;
 
-    dichotomySearchOffset(m_beg,m_end,pGbeg,pGene->Start,true);
-    dichotomySearchOffset(m_beg,m_end,pGend,pGene->End,false);
+    dtemp = getMethyRatio(m_beg, m_end, pGene->Start, pGene->End, pGene->chain
+#ifdef CG_NUMBER
+            ,pGene->NumCG
+#endif //!CG_NUMBER
+    );
+    if(dtemp == -1) return;
+    pGene->methy_ratio=dtemp;
+
+    if(pThis->have_promoter)
+    {
+        dtemp = getMethyRatio(m_beg, m_end
+                              , (pGene->Start < pThis->promoterLen) ? 0 : pGene -> Start - pThis -> promoterLen
+                              , pGene->Start, pGene->chain
+                    #ifdef CG_NUMBER
+                            ,pGene->NumCG_promoter
+                    #endif //!CG_NUMBER
+                              );
+        if(dtemp == -1) return;
+        pGene->methy_ratio_promoter=dtemp;
+    }
+}
+
+double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end, bool chain
+#ifdef CG_NUMBER
+, unsigned long& cg_numb
+#endif // CG_NUMBER
+)
+{
+    char* pGbeg= nullptr, *pGend= nullptr;
+    char* p=nullptr;
+
+    cg_numb=0;
+
+    /* Search position. */
+    dichotomySearchOffset(m_beg,m_end,pGbeg,p_start,true);
+    dichotomySearchOffset(m_beg,m_end,pGend,p_end,false);
 
     if(!pGbeg && pGend)
         pGbeg=m_beg;
     else if(pGbeg && !pGend)
         pGend=m_end;
     else if(!pGbeg && !pGend)
-        return;
+        return -1;
 
+    /* Calculate methylation ratio. */
     size_t depth = 0, mCdep = 0;
     p=pGbeg;
+
     while(true)
     {
         if(p>pGend) break;
         p=goFrontItem(p,3);
-        if((*p == '+') & (pGene->chain))
+        if((*p == '+') == (chain))
         {
+#ifdef CG_NUMBER
+            p=goFrontItem(p, 1);
+            if((*p)=='C' && (*(p+1))=='G') cg_numb++;
+            p=goFrontItem(p, 1);
+#else
             p=goFrontItem(p, 2);
+#endif //!CG_NUMBER
+
             depth+=atoiChr(p);
             p=goFrontItem(p,1);
             mCdep+=atoiChr(p);
@@ -157,7 +201,8 @@ void BED::methyMining(ProfileNode *& pGene)
         p++;
     }
     if(depth!=0)
-        pGene->methy_ratio=(double)((double)mCdep / (double)depth);
+        return (double)((double)mCdep / (double)depth);
+    return -1;
 }
 
 void *BED::pthFuncRaw(void *args)
@@ -350,13 +395,13 @@ void BED::setValuePfNode(char *&pgoback, char *&pID, ProfileNode *&pPfN)
 {
     pPfN->chr=atoiChr(pgoback);
     pgoback=goFrontItem(pgoback, 3);
-    if(!pgoback) exit(0x0F0001);
+    if(!pgoback) exit(SET_VALUE_ERROR + 1);
     pPfN->Start=atoll(pgoback);
     pgoback=goFrontItem(pgoback, 1);
-    if(!pgoback) exit(0x0F0002);
+    if(!pgoback) exit(SET_VALUE_ERROR + 2);
     pPfN->End=atoll(pgoback);
     pgoback=goFrontItem(pgoback, 2);
-    if(!pgoback) exit(0x0F0003);
+    if(!pgoback) exit(SET_VALUE_ERROR + 3);
     pPfN->chain=((*pgoback)=='+');
     pgoback=pID;
     for(int j=0;j<SEARCH_RANGE;j++, pID++)
@@ -389,8 +434,10 @@ BED::BED()
     if(pthread_mutex_init(&mutex,NULL)!=0)
     {
         perror("pthread_mutex_init:");
-        exit(0x011111);
+        exit(MUTEX_ERROR);
     }
+    for(auto & i : chrList)
+        i={(unsigned long)-1,0};
 }
 
 BED::BED(char* bedfile)
@@ -399,7 +446,7 @@ BED::BED(char* bedfile)
     if(pthread_mutex_init(&mutex,NULL)!=0)
     {
         perror("pthread_mutex_init:");
-        exit(0x011111);
+        exit(MUTEX_ERROR);
     }
     for(auto & i : chrList)
         i={(unsigned long)-1,0};
@@ -415,23 +462,25 @@ void BED::bedfileOpen(const char * bedfile)
     // Open file
     if((fileHandle = open(bedfile, O_RDWR)) < 0)
     {
-        perror("open()") ;
-        exit(0x010001);
+        perror("open(): ") ;
+        exit(FILE_OPEN_ERROR+1);
     }
 
     // Get file stat
     if((fstat(fileHandle, &sb)) == -1 )
     {
-        perror("fstat()") ;
-        exit(0x010002);
+        perror("fstat(): ") ;
+        exit(FILE_OPEN_ERROR+2);
     }
+
+    strcpy(this->bedname, bedfile);
 
     // Map file in memory
     mapped = (char*)mmap(nullptr, sb.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fileHandle, 0);
     if(mapped == (char*)-1)
     {
-        perror("mmap") ;
-        exit(0x010003);
+        perror("mmap(): ") ;
+        exit(FILE_OPEN_ERROR+3);
     }
 }
 
@@ -631,7 +680,7 @@ void BED::savechrList()
     if(!out.is_open())
     {
         perror("ofstream: ") ;
-        exit(0x00000A);
+        exit(FILE_SAVE_ERROR);
     }
     out << "# chr base  length" << endl;
     for(int i=1;i<MAX_CHR-3;i++)
@@ -663,21 +712,21 @@ void BED::processProfile(char *&gff3file)
 {
     if((indexHandle = open(gff3file, O_RDWR)) < 0)
     {
-        perror("gff3 open()") ;
-        exit(0x011001);
+        perror("gff3 open(): ") ;
+        exit(FILE_OPEN_ERROR + 0xA);
     }
 
     if((fstat(indexHandle, &sbIndex)) == -1 )
     {
-        perror("gff3 fstat()") ;
-        exit(0x011002);
+        perror("gff3 fstat(): ") ;
+        exit(FILE_OPEN_ERROR + 0xB);
     }
 
     mappedIndex = (char*)mmap(nullptr, sbIndex.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, indexHandle, 0);
     if(mappedIndex == (char*)-1)
     {
-        perror("gff3 mmap") ;
-        exit(0x011003);
+        perror("gff3 mmap(): ") ;
+        exit(FILE_OPEN_ERROR + 0xC);
     }
     // Build up profile list
 
@@ -758,55 +807,65 @@ void BED::saveProfile(const char *nameProfile)
     if(fout== nullptr)
     {
         perror("fopen(): ");
-        exit(0x00000B);
+        exit(FILE_SAVE_ERROR + 0xA);
     }
-    fprintf(fout,"chr\tID\tStart\tEnd\tStrand\tMethy_ratio\n");
-    for(int i=0;i<geneNum;i++)
+    fprintf(fout,"chr\tID\tStart\tEnd\tStrand\tMethy_ratio");
+#ifdef CG_NUMBER
+    fprintf(fout,"\tCG");
+#endif //!CG_number
+    if(have_promoter)
     {
-        if(abs(profileList[i]->methy_ratio) <= 1e-15) continue;
-        switch (profileList[i]->chr)
-        {
+        fprintf(fout, "\tPromoter_methy_ratio");
+#ifdef CG_NUMBER
+        fprintf(fout,"\tCG_promoter");
+#endif //!CG_number
+    }
+    fprintf(fout,"\n");
+    for(int i=0;i<geneNum;i++) {
+        if (abs(profileList[i]->methy_ratio) <= 1e-15) continue;
+        string str_chr;
+        switch (profileList[i]->chr) {
 #ifdef __CHR_CHL
             case MAX_CHR-4:
-                fprintf(fout, "CH\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
-                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
-                        profileList[i]->methy_ratio);
+                str_chr="CH";
                 break;
 #endif //!__CHR_CHL
-            case MAX_CHR-3:
-                fprintf(fout, "MT\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
-                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
-                        profileList[i]->methy_ratio);
+            case MAX_CHR - 3:
+                str_chr = "MT";
                 break;
 #ifdef __CHR_ZW
-            case MAX_CHR-2:
-                fprintf(fout, "Z\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
-                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
-                        profileList[i]->methy_ratio);
-                break;
-            case MAX_CHR-1:
-                fprintf(fout, "W\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
-                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
-                        profileList[i]->methy_ratio);
-                break;
+                case MAX_CHR-2:
+                    str_chr="Z";
+                    break;
+                case MAX_CHR-1:
+                    str_chr="W";
+                    break;
 #else
-            case MAX_CHR-2:
-                fprintf(fout, "X\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
-                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
-                        profileList[i]->methy_ratio);
+            case MAX_CHR - 2:
+                str_chr = "X";
                 break;
-            case MAX_CHR-1:
-                fprintf(fout, "Y\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->ID,
-                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
-                        profileList[i]->methy_ratio);
+            case MAX_CHR - 1:
+                str_chr = "Y";
                 break;
 #endif //!__CHR_ZW
             default:
-                fprintf(fout, "%d\t%s\t%ld\t%ld\t%c\t%.15lf\n", profileList[i]->chr, profileList[i]->ID,
-                        profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
-                        profileList[i]->methy_ratio);
+                str_chr = to_string(profileList[i]->chr);
                 break;
         }
+        fprintf(fout, "%s\t%s\t%ld\t%ld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID,
+                profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
+                profileList[i]->methy_ratio);
+#ifdef CG_NUMBER
+        fprintf(fout, "\t%ld", profileList[i]->NumCG);
+#endif //!CG_number
+        if (have_promoter)
+        {
+            fprintf(fout, "\t%.15lf", profileList[i]->methy_ratio_promoter);
+#ifdef CG_NUMBER
+            fprintf(fout, "\t%ld", profileList[i]->NumCG_promoter);
+#endif //!CG_number
+        }
+        fprintf(fout, "\n");
     }
     fclose(fout);
 }

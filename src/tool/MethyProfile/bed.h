@@ -38,10 +38,16 @@ namespace bed
     {
         char ID[0x20] = {0};        /* ID of the gene. */
         int chr = 0;                /* The chromosome where the gene is located. */
-        bool chain = -1;            /* Positive chain or negative chain. */
+        bool chain = -1;            /* Positive chain (true) or negative chain (false). */
         unsigned long Start= 0;
         unsigned long End= 0;       /* Location on chromosome. */
+#ifdef CG_NUMBER
+        unsigned long NumCG = 0;    /* CG methylation number. */
+        unsigned long NumCG_promoter = 0;   /* CG methylation number in promoter. */
+#endif//!CG_NUMBER
         double methy_ratio = 0.0f;  /* Methylation ratio of this gene. */
+        double methy_ratio_promoter = 0.0f;
+                                    /* Methylation ratio of the promoter of this gene. */
     };
 
     class BED
@@ -141,6 +147,18 @@ namespace bed
              * This function can calculate methylation ratio of every entry based on bed file.
              * */
 
+        static inline double getMethyRatio(char* m_beg, char* m_end, size_t p_start, size_t p_end, bool chain
+        #ifdef CG_NUMBER
+                    , unsigned long& cg_numb
+        #endif // CG_NUMBER
+        );
+            /* Get methy ratio.
+             * m_beg and m_end are pointers that show the block edge.
+             * p_start and p_end are the sequence in chromosome.
+             * chain shows the positive chain (true) or negative chain (false).
+             * This function will return methyratio from m_beg and m_end form p_start to p_end on chromosome.
+             * */
+
         static inline char* goFrontItem(char* p, int n);
             /* Reach forward item in a line with item separated by '\t'.
              * p: The item now;
@@ -168,6 +186,10 @@ namespace bed
         static BED* pThis;
             /* static pointer points to this class to ensure the thread function can
              * access data in this class. */
+        bool have_promoter = false;
+            /* Analysing promoters methylation information if true.*/
+        size_t promoterLen = PROMOTER_LENGTH;
+            /* Search range of promoters. */
     public:
         BED();                  /* Constructor without opening and mapping file.*/
         BED(char *bedfile);     /* Constructor with opening and mapping file.*/

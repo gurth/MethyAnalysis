@@ -88,5 +88,16 @@
 /* Show the progress bar. */
 
 #define PROMOTER_LENGTH 2000
+/* Promoter length at the front of gene. If you use -p option in arguments,
+ * promoter methy fation will be output in profile.
+ * Custom.
+ * You can change it if needed. Default to 2000.
+ * */
+
+#define CG_NUMBER
+/* Define this when you want to save CG number in profile.
+ * */
+
+#include "merror.h"
 
 #endif //!METHYPROFILE_CONFIG_H
