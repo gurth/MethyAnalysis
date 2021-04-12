@@ -358,6 +358,7 @@ void *BED::pthFuncProfileList(void *args)
             {
                 p=p+3;
                 char* q=p+SEARCH_RANGE_INDEX;
+                if(q>pend) q=pend;
                 for(; p<q; p++)
                 {
                     if((*p)=='I')          // Find "ID=gene:" which means a gene
