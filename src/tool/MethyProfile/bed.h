@@ -17,9 +17,9 @@ namespace bed
 {
     #include "config.h"
 
-    #define MUTEX_LOCK(__CODE, __MUTEX)  pthread_mutex_lock(&__MUTEX); \
+    #define MUTEX_LOCK(__CODE, __MUTEX)  (__MUTEX).lock(); \
         __CODE \
-        pthread_mutex_unlock(&__MUTEX);                                                               \
+        (__MUTEX).unlock();                                                               \
     /* Lock and unlock __CODE in thread function. */
 
     enum class Method {raw, tag, profile};
@@ -68,7 +68,7 @@ namespace bed
         BlockListNode chrList[MAX_CHR];         /* Chromosome list in the form of blockList. */
         ProfileNode* profileList[MAX_GENE]={nullptr};
                                         /* Profile list, you can see ProfileNode definition above. */
-        pthread_mutex_t mutex;          /* Global mutex of thread. */
+        std::mutex mtx;          /* Global mutex of thread. */
     private:
         inline void processRaw();
             /* Process bed file with Method::raw, which means byte manipulation directly.
@@ -101,31 +101,31 @@ namespace bed
              * pos: The point pending search.
              * isBeg: Indicates the beginning of an interval or the ending. */
 
-        static void *pthFuncRaw(void *args);
+        static void pthFuncRaw();
             /* Thread function.
              * Implementation of processing bed file with Method::raw.
              * This function will process the block which is divided form bed file. */
 
-        static void *pthFuncTag(void *args);
+        static void pthFuncTag();
             /* Thread function.
              * Implementation of processing bed file to generate chromosome list.
              * Make sure block list has been build before.
              * The block which processing refers to the block list.
              * */
 
-        static void *pthFuncBlockList(void *args);
+        static void pthFuncBlockList();
             /* Thread function.
              * Implementation of processing bed file to generate block list.
              * This function will make sure a block is begin with the beginning of
              * an entry, and end with the beginning with another entry. */
 
-        static void *pthFuncProfileList(void *args);
+        static void pthFuncProfileList();
             /* Thread function.
              * Implementation of generation of profile list from gff3 file.
              * This function can gather basic information of entry in profile.
              * */
 
-        static void *pthFuncProfile(void *args);
+        static void pthFuncProfile();
             /* Thread function.
              * Implementation of fulfill the profile list.
              * This function can calculate methylation ratio of every entry based on bed file.

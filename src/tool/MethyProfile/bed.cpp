@@ -5,10 +5,11 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include <pthread.h>
-#include<stdio.h>
-#include<stdlib.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <thread>
+#include <mutex>
 #include<unistd.h>
 //#include<error.h>
 #include <time.h>
@@ -209,12 +210,12 @@ double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end
     return -1;
 }
 
-void *BED::pthFuncRaw(void *args)
+void BED::pthFuncRaw()
 {
     MUTEX_LOCK(
             size_t i = pThis->threadNum++;
             ,
-            pThis->mutex
+            pThis->mtx
     )
     size_t begOffset = pThis->base_offset + i*BLOCK_SIZE;
 
@@ -245,18 +246,17 @@ void *BED::pthFuncRaw(void *args)
         pThis->bar.set_option(indicators::option::PostfixText{buff});
         pThis->bar.set_progress(pThis->progress);
         ,
-        pThis->mutex
+        pThis->mtx
     )
 #endif //!SHOW_PROGRESSBAR
-    pthread_exit(nullptr);
 }
 
-void *BED::pthFuncTag(void *args)
+void BED::pthFuncTag()
 {
     MUTEX_LOCK(
         size_t k= pThis->nodeNum++;
         ,
-        pThis->mutex
+        pThis->mtx
     )
     size_t begOffset = pThis->blockList[k].base;
     char* q=&(pThis->mapped[begOffset]);
@@ -272,19 +272,18 @@ void *BED::pthFuncTag(void *args)
         pThis->progress+=pThis->progUnit;
         pThis->bar.set_progress(pThis->progress);
         ,
-        pThis->mutex
+        pThis->mtx
     )
 #endif //!SHOW_PROGRESSBAR
-    pthread_exit(nullptr);
 }
 
-void *BED::pthFuncBlockList(void *args)
+void BED::pthFuncBlockList()
 {
     MUTEX_LOCK(
             size_t i = pThis->threadNum++;
             size_t k= pThis->nodeNum++;
             ,
-            pThis->mutex
+            pThis->mtx
     )
     size_t begOffset = pThis->base_offset + i*BLOCK_SIZE;
     int j=0;
@@ -301,18 +300,17 @@ void *BED::pthFuncBlockList(void *args)
             pThis->progress+=pThis->progUnit;
             pThis->bar.set_progress(pThis->progress);
             ,
-            pThis->mutex
+            pThis->mtx
         )
 #endif //!SHOW_PROGRESSBAR
-    pthread_exit(nullptr);
 }
 
-void *BED::pthFuncProfile(void *args)
+void BED::pthFuncProfile()
 {
     MUTEX_LOCK(
             size_t i = pThis->threadNum++;
             ,
-            pThis->mutex
+            pThis->mtx
     )
     size_t begOffset = pThis->base_offset + i*PROC_GENE_SIZE;
     size_t length = PROC_GENE_SIZE;
@@ -327,20 +325,18 @@ void *BED::pthFuncProfile(void *args)
             pThis->progress+=pThis->progUnit;
             pThis->bar.set_progress(pThis->progress);
             ,
-            pThis->mutex
+            pThis->mtx
         )
 #endif //!SHOW_PROGRESSBAR
     }
-
-    pthread_exit(nullptr);
 }
 
-void *BED::pthFuncProfileList(void *args)
+void BED::pthFuncProfileList()
 {
     MUTEX_LOCK(
         size_t i = pThis->threadNum++;
         ,
-        pThis->mutex
+        pThis->mtx
     )
     size_t begOffset = pThis->base_offset + i*BLOCK_SIZE_INDEX;
     size_t length = BLOCK_SIZE_INDEX;
@@ -376,7 +372,7 @@ void *BED::pthFuncProfileList(void *args)
                             MUTEX_LOCK(
                                     pThis->profileList[pThis->geneNum ++]=pfNtmp;
                                     ,
-                                    pThis->mutex
+                                    pThis->mtx
                                     )
                             break;
                         }
@@ -390,10 +386,9 @@ void *BED::pthFuncProfileList(void *args)
             pThis->progress+=pThis->progUnit;
             pThis->bar.set_progress(pThis->progress);
             ,
-            pThis->mutex
+            pThis->mtx
             )
 #endif //!SHOW_PROGRESSBAR
-    pthread_exit(nullptr);
 }
 
 void BED::setValuePfNode(char *&pgoback, char *&pID, ProfileNode *&pPfN)
@@ -436,11 +431,6 @@ char *BED::goFrontItem(char *p, int n)
 BED::BED()
 {
     pThis= this;
-    if(pthread_mutex_init(&mutex,NULL)!=0)
-    {
-        perror("pthread_mutex_init:");
-        exit(MUTEX_ERROR);
-    }
     for(auto & i : chrList)
         i={(unsigned long)-1,0};
 }
@@ -448,11 +438,6 @@ BED::BED()
 BED::BED(char* bedfile)
 {
     pThis= this;
-    if(pthread_mutex_init(&mutex,NULL)!=0)
-    {
-        perror("pthread_mutex_init:");
-        exit(MUTEX_ERROR);
-    }
     for(auto & i : chrList)
         i={(unsigned long)-1,0};
     if(bedfile== nullptr)
@@ -497,7 +482,6 @@ void BED::bedfileClose()
 
 BED::~BED()
 {
-    pthread_mutex_destroy(&mutex);
     bedfileClose();
 }
 
@@ -546,7 +530,7 @@ void BED::processRaw()
     size_t readNum=0;
     size_t restSize=0;
     size_t blockNum=0;
-    pthread_t pth[MAXTHREAD];
+    thread* pth[MAXTHREAD];
     char buff[0x30];
 
     printf("\033[33m[Warning]\033[0m: Start reading ...\n");
@@ -571,13 +555,15 @@ void BED::processRaw()
 
         // Create thread
         for (int i = 0; i < blockNum; i++)
-            pthread_create(&pth[i], nullptr, pthFuncRaw, nullptr);
+            pth[i]=new thread(this->pthFuncRaw);
 
         // Join thread
         for (int i = 0; i < blockNum; i++)
-            pthread_join(pth[i], nullptr);
+        {
+            pth[i]->join();
+            delete pth[i];
+        }
     }
-
 }
 
 void BED::processTag()
@@ -585,7 +571,7 @@ void BED::processTag()
     size_t readNum=0;
     size_t restSize=0;
     size_t blockNum=0;
-    pthread_t pth[MAXTHREAD];
+    thread* pth[MAXTHREAD];
     char buff[0x30];
     char* p= nullptr;
 
@@ -613,11 +599,14 @@ void BED::processTag()
 
         // Create thread
         for (int i = 0; i < blockNum; i++)
-            pthread_create(&pth[i], nullptr, pthFuncBlockList, nullptr);
+            pth[i]=new thread(pthFuncBlockList);
 
         // Join thread
         for (int i = 0; i < blockNum; i++)
-            pthread_join(pth[i], nullptr);
+        {
+            pth[i]->join();
+            delete pth[i];
+        }
 
     }
 
@@ -659,11 +648,14 @@ void BED::processTag()
 
         // Create thread
         for (int i = 0; i < blockNum; i++)
-            pthread_create(&pth[i], nullptr, pthFuncTag, nullptr);
+            pth[i]=new thread(pthFuncTag);
 
         // Join thread
         for (int i = 0; i < blockNum; i++)
-            pthread_join(pth[i], nullptr);
+        {
+            pth[i]->join();
+            delete pth[i];
+        }
     }
 
     vector<BlockListNode* >pTmpList;
@@ -738,7 +730,7 @@ void BED::processProfile(char *&gff3file)
     size_t readNum=0;
     size_t restSize=0;
     size_t blockNum=0;
-    pthread_t pth[MAXTHREAD];
+    thread* pth[MAXTHREAD];
     char buff[0x30];
 
     printf("\033[33m[Warning]\033[0m: Start generating profile ...\n");
@@ -766,11 +758,14 @@ void BED::processProfile(char *&gff3file)
 
         // Create thread
         for (int i = 0; i < blockNum; i++)
-            pthread_create(&pth[i], nullptr, pthFuncProfileList, nullptr);
+            pth[i]=new thread(pthFuncProfileList);
 
         // Join thread
         for (int i = 0; i < blockNum; i++)
-            pthread_join(pth[i], nullptr);
+        {
+            pth[i]->join();
+            delete pth[i];
+        }
     }
     // Profile generation
 
@@ -795,11 +790,14 @@ void BED::processProfile(char *&gff3file)
 
         // Create thread
         for (int i = 0; i < blockNum; i++)
-            pthread_create(&pth[i], nullptr, pthFuncProfile, nullptr);
+            pth[i]=new thread(pthFuncProfile);
 
         // Join thread
         for (int i = 0; i < blockNum; i++)
-            pthread_join(pth[i], nullptr);
+        {
+            pth[i]->join();
+            delete pth[i];
+        }
     }
 
     munmap(mappedIndex,sbIndex.st_size);
