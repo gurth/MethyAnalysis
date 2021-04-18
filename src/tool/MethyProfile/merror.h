@@ -26,6 +26,11 @@
  * File save error.
  * */
 
+#define DIRECTORY_CREATE_ERROR 0x000d0
+/* The highest bit of the third byte is 1 means I/O error.
+ * Directory create error.
+ * */
+
 #define ARGUMENT_ERROR 0x00010
 /* The highest bit of the third byte is 0 means common error.
  * Argument error.

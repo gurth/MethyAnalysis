@@ -12,7 +12,6 @@
 #include <thread>
 #include <mutex>
 #include <unistd.h>
-//#include<error.h>
 #include <time.h>
 #include <vector>
 #include <string>
@@ -24,6 +23,17 @@
 #ifdef ALLOW_PLUG_IN_SAVE
 #include <dlfcn.h>
 #endif //!ALLOW_PLUG_IN_SAVE
+
+#ifdef _WIN32_PLATFORM_
+
+#include <direct.h>
+#include <io.h>
+
+#elif defined(_UNIX_PLATFORM_)
+
+#include <sys/stat.h>
+
+#endif // !_WIN32_PLATFORM_
 
 using namespace std;
 using namespace bed;
@@ -137,7 +147,7 @@ void BED::methyMining(ProfileNode *& pGene)
         if(*(m_end)=='\n') break;
     m_end++;
 
-    dtemp = getMethyRatio(m_beg, m_end, pGene->Start, pGene->End, pGene->chain
+    dtemp = getMethyRatio(m_beg, m_end, pGene->Start, pGene->End, pGene->ID, pGene->single_tag, pGene->chain
 #ifdef CG_NUMBER
             ,pGene->NumCG
 #endif //!CG_NUMBER
@@ -149,7 +159,7 @@ void BED::methyMining(ProfileNode *& pGene)
     {
         dtemp = getMethyRatio(m_beg, m_end
                               , (pGene->Start < pThis->promoterLen) ? 0 : pGene -> Start - pThis -> promoterLen
-                              , pGene->Start, pGene->chain
+                              , pGene->Start, pGene->ID, false, pGene->chain
                     #ifdef CG_NUMBER
                             ,pGene->NumCG_promoter
                     #endif //!CG_NUMBER
@@ -167,7 +177,7 @@ void BED::methyMining(ProfileNode *& pGene)
 #ifdef CG_NUMBER
             size_t CG_tmp = 0;
 #endif //!CG_NUMBER
-            dtemp = getMethyRatio(m_beg, m_end, pEx->Start, pEx->End, pEx->chain
+            dtemp = getMethyRatio(m_beg, m_end, pEx->Start, pEx->End, nullptr, false, pEx->chain
 #ifdef CG_NUMBER
                     ,CG_tmp
 #endif //!CG_NUMBER
@@ -179,7 +189,7 @@ void BED::methyMining(ProfileNode *& pGene)
     }
 }
 
-double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end, bool chain
+double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end, char* ID, bool single_tag, bool chain
 #ifdef CG_NUMBER
 , unsigned long& cg_numb
 #endif // CG_NUMBER
@@ -200,6 +210,8 @@ double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end
         pGend=m_end;
     else if(!pGbeg && !pGend)
         return -1;
+
+    if(pThis->do_single_analyse && single_tag) saveSingleData(pGbeg, pGend, ID);
 
     /* Calculate methylation ratio. */
     size_t depth = 0, mCdep = 0;
@@ -997,7 +1009,7 @@ void BED::saveExternProfile(const char *nameProfileEx)
         perror("fopen(): ");
         exit(FILE_SAVE_ERROR + 0xC);
     }
-    fprintf(fout,"chr\tGeneID_Type\tStart\tEnd\tStrand\tMethy_ratio");
+    fprintf(fout,"chr\tGeneID\tType\tStart\tEnd\tStrand\tMethy_ratio");
     fprintf(fout,"\n");
     for(int i=0;i<geneNum;i++)
     {
@@ -1032,7 +1044,7 @@ void BED::saveExternProfile(const char *nameProfileEx)
                 str_chr = to_string(profileList[i]->chr);
                 break;
         }
-        fprintf(fout, "%s\t%s_%s\t%ld\t%ld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID, profileList[i]->str_type,
+        fprintf(fout, "%s\t%s\t%s\t%ld\t%ld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID, profileList[i]->str_type,
                 profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
                 profileList[i]->methy_ratio);
         fprintf(fout, "\n");
@@ -1040,7 +1052,7 @@ void BED::saveExternProfile(const char *nameProfileEx)
         while (true)
         {
             if(p== nullptr) break;
-            fprintf(fout, "%s\t%s_%s\t%ld\t%ld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID, p->str_type,
+            fprintf(fout, "%s\t%s\t%s\t%ld\t%ld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID, p->str_type,
                     p->Start, p->End, (p->chain) ? '+' : '-',
                     p->methy_ratio);
             fprintf(fout, "\n");
@@ -1048,6 +1060,24 @@ void BED::saveExternProfile(const char *nameProfileEx)
         }
     }
     fclose(fout);
+}
+
+void BED::saveSingleData(char *m_beg, char *m_end, char *ID)
+{
+    if(!ID) return;
+    char name_buff[NAME_MAX]={0};
+    sprintf(name_buff, "./single/%s", ID);
+
+    FILE* sgf= fopen(name_buff, "wb");
+    if(sgf == nullptr)
+    {
+        perror("fopen(): ");
+        exit(FILE_SAVE_ERROR + 0xd);
+    }
+
+    fprintf(sgf, "#chr\tstart\tend\tstrand\tmCtype\tdepth\tmCdep\tlevel\n");
+    fwrite(m_beg, m_end-m_beg, 1, sgf);
+    fclose(sgf);
 }
 
 int BED::atoiChr(const char *nptr)
@@ -1182,6 +1212,25 @@ void BED::loadSingleList(char *listfile)
         do_single_analyse=true;
         sglist=pset;
         /* To do. */
+        int acc=
+#ifdef _WIN32_PLATFORM_
+                _access("single", 0);
+#elif defined(_UNIX_PLATFORM_)
+                access("single", 0);
+        if(acc==-1)
+        {
+#endif // !_WIN32_PLATFORM_
+            int mk =
+#ifdef _WIN32_PLATFORM_
+                    _mkdir("single");
+#elif defined(_UNIX_PLATFORM_)
+                    mkdir("single", 0755);
+#endif // !_WIN32_PLATFORM_
+            if (mk == -1) {
+                printf("\033[31m[Error]\033[0m:Cannot create folder for single genes.\n");
+                exit(DIRECTORY_CREATE_ERROR);
+            }
+        }
     }
 
     list_in.close();

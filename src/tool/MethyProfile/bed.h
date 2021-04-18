@@ -132,7 +132,7 @@ namespace bed
              * This function can calculate methylation ratio of every entry based on bed file.
              * */
 
-        static inline double getMethyRatio(char* m_beg, char* m_end, size_t p_start, size_t p_end, bool chain
+        static inline double getMethyRatio(char* m_beg, char* m_end, size_t p_start, size_t p_end, char* ID, bool single_tag, bool chain
         #ifdef CG_NUMBER
                     , unsigned long& cg_numb
         #endif // CG_NUMBER
@@ -141,6 +141,7 @@ namespace bed
              * m_beg and m_end are pointers that show the block edge.
              * p_start and p_end are the sequence in chromosome.
              * chain shows the positive chain (true) or negative chain (false).
+             * ID is the ID of this entry.
              * This function will return methyratio from m_beg and m_end form p_start to p_end on chromosome.
              * */
 
@@ -179,6 +180,9 @@ namespace bed
 
         static bool isdigit(int x);
             /* Determine whether it is a digit. Only used in atoiChr(). */
+
+        static void saveSingleData(char* m_beg, char* m_end, char* ID);
+            /* Save single gene information as BED format. */
 
 #ifdef ALLOW_PLUG_IN_SAVE
         static inline void LoadSavePlugInAndJmp(const char* foutput);
