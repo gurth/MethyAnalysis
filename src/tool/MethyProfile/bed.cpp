@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <thread>
 #include <mutex>
 #include<unistd.h>
@@ -826,7 +827,7 @@ void BED::saveProfile(const char *nameProfile)
     fprintf(fout,"\n");
     for(int i=0;i<geneNum;i++)
     {
-        if (abs(profileList[i]->methy_ratio) <= 1e-15) continue;
+        if (fabs(profileList[i]->methy_ratio) <= 1e-15) continue;
         string str_chr;
         switch (profileList[i]->chr) {
 #ifdef __CHR_CHL
