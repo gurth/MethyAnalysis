@@ -10,6 +10,7 @@
 
 #include <sys/stat.h>
 #include <limits.h>
+
 #include <indicators/block_progress_bar.hpp>
 #include <indicators/cursor_control.hpp>
 
@@ -152,8 +153,20 @@ namespace bed
              * p=c;
              * p= goFrontItem(p, 2);   // p = "zzzz\n"  */
 
-        static inline void setValuePfNode(char*&pgoback, char*& pID, ProfileNode*& pPfN);
+        static inline void setValueBasic(char*& p, BasicEntry*& pEntry);
+            /* Fulfill basic information in an entry. */
+
+        static inline void setValuePfNode(char*& pgoback, char*& pID, ProfileNode*& pPfN);
             /* Fulfill an profile entry. */
+
+        static inline void setValueExtern(char*& p, ExternNode*& pEntry);
+            /* Fulfill basic information in an entry. */
+
+        static inline void copyItem(char*& d, char*& s);
+            /* Copy a item as string to destination. */
+
+        static inline char* goNextEntry(char* p);
+            /* Get to the beginning of next entry. */
 
         static inline void methyMining(ProfileNode*& pGene);
             /* Calculate methylation ratio of a particular entry of profile list. */
@@ -178,8 +191,12 @@ namespace bed
              * access data in this class. */
         bool have_promoter = false;
             /* Analysing promoters methylation information if true.*/
+        bool do_single_analyse = false;
+            /* Analysing single gene information. */    
         size_t promoterLen = PROMOTER_LENGTH;
             /* Search range of promoters. */
+        void* sglist = nullptr;
+            /* Single gene list which is pending analysis.*/    
     public:
         BED();                  /* Constructor without opening and mapping file.*/
         BED(char *bedfile);     /* Constructor with opening and mapping file.*/
@@ -210,6 +227,16 @@ namespace bed
              * If nameProfile == nullptr, profile list will be saved as
              * $(YOUR_BED_FILE_NAME).methyprofile.txt*/
 
+        void saveExternProfile(const char* nameProfileEx);
+            /* Save extern list of specific genes.
+             * If nameProfileEx == nullptr, profile list will be saved as
+             * $(YOUR_BED_FILE_NAME).gene.txt */
+
+        void loadSingleList(char* listfile);    
+            /* Load single list from file.
+             * This function will load information from file and init relative data structure.
+             * */
+            
         ~BED(); /* Call bedfileClose() to deconstruct class. */
     };
 

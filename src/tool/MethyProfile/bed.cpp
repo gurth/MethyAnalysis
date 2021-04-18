@@ -11,11 +11,12 @@
 #include <math.h>
 #include <thread>
 #include <mutex>
-#include<unistd.h>
+#include <unistd.h>
 //#include<error.h>
 #include <time.h>
 #include <vector>
 #include <string>
+#include <set>
 #include <fstream>
 #include <algorithm>
 #include "bed.h"
@@ -156,6 +157,26 @@ void BED::methyMining(ProfileNode *& pGene)
         if(dtemp == -1) return;
         pGene->methy_ratio_promoter=dtemp;
     }
+
+    if(pThis->do_single_analyse && pGene->single_tag)
+    {
+        ExternNode* pEx = pGene->next;
+        while (true)
+        {
+            if(pEx== nullptr) break;
+#ifdef CG_NUMBER
+            size_t CG_tmp = 0;
+#endif //!CG_NUMBER
+            dtemp = getMethyRatio(m_beg, m_end, pEx->Start, pEx->End, pEx->chain
+#ifdef CG_NUMBER
+                    ,CG_tmp
+#endif //!CG_NUMBER
+            );
+            if(dtemp == -1) return;
+            pEx->methy_ratio=dtemp;
+            pEx=pEx->next;
+        }
+    }
 }
 
 double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end, bool chain
@@ -198,9 +219,9 @@ double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end
             p=goFrontItem(p, 2);
 #endif //!CG_NUMBER
 
-            depth+=atoiChr(p);
+            depth+=atoi(p);
             p=goFrontItem(p,1);
-            mCdep+=atoiChr(p);
+            mCdep+=atoi(p);
         }
         for(int j=0;j<SEARCH_RANGE;j++, p++)
             if((*p)=='\n') break;
@@ -370,6 +391,55 @@ void BED::pthFuncProfileList()
 
                             auto* pfNtmp=(ProfileNode*) malloc(sizeof(ProfileNode));
                             setValuePfNode(pgoback,p,pfNtmp);
+
+                            if(pThis->do_single_analyse)
+                            {
+                                auto* pSet = (set<string>*)pThis->sglist;
+                                string id_now = pfNtmp->ID;
+
+                                MUTEX_LOCK(
+                                        auto iter = pSet->find(id_now);
+                                        ,
+                                        pThis->mtx
+                                )
+
+                                if(iter != pSet->end())
+                                {
+                                    ExternNode* pExRoot = nullptr;
+                                    ExternNode* pExN = pExRoot;
+                                    ExternNode* pExBuff = nullptr;
+                                    pfNtmp->single_tag=true;
+                                    p = goNextEntry(p);
+
+                                    while(true)
+                                    {
+                                        if(*p=='#')
+                                        {
+                                            if(*(p+1) == '#' && *(p+2) == '#')
+                                                break;
+                                            else goto NEXT__;
+                                        }
+                                        if(p>pend) break;
+                                        pExBuff=(ExternNode*)malloc(sizeof(ExternNode));
+                                        setValueExtern(p, pExBuff);
+                                        if(!pExRoot)
+                                        {
+                                            pExRoot=pExBuff;
+                                            pExN=pExRoot;
+                                        }
+                                        else
+                                        {
+                                            pExN->next = pExBuff;
+                                            pExN = pExN->next;
+                                        }
+                                    NEXT__:
+                                        p = goNextEntry(p);
+                                    }
+                                    p-=GO_BACK_LENGTH;
+                                    pfNtmp->next=pExRoot;
+                                }
+                            }
+
                             MUTEX_LOCK(
                                     pThis->profileList[pThis->geneNum ++]=pfNtmp;
                                     ,
@@ -392,23 +462,59 @@ void BED::pthFuncProfileList()
 #endif //!SHOW_PROGRESSBAR
 }
 
-void BED::setValuePfNode(char *&pgoback, char *&pID, ProfileNode *&pPfN)
+void BED::copyItem(char *&d, char *&s)
 {
-    pPfN->chr=atoiChr(pgoback);
-    pgoback=goFrontItem(pgoback, 3);
-    if(!pgoback) exit(SET_VALUE_ERROR + 1);
-    pPfN->Start=atoll(pgoback);
-    pgoback=goFrontItem(pgoback, 1);
-    if(!pgoback) exit(SET_VALUE_ERROR + 2);
-    pPfN->End=atoll(pgoback);
-    pgoback=goFrontItem(pgoback, 2);
-    if(!pgoback) exit(SET_VALUE_ERROR + 3);
-    pPfN->chain=((*pgoback)=='+');
+    char* p=s;
+    for(int j=0;j<SEARCH_RANGE;j++, p++)
+        if((*p)=='\t') break;
+    memcpy(d, s, p-s);
+    d[(p-s)]='\0';
+}
+
+char *BED::goNextEntry(char *p)
+{
+    for(int j=0;j<SEARCH_RANGE;j++, p++)
+        if((*p)=='\n') break;
+    p++;
+    return p;
+}
+
+void BED::setValueBasic(char *&p, BasicEntry *&pEntry)
+{
+    pEntry->chr=atoiChr(p);
+    p=goFrontItem(p, 2);
+    if(!p) exit(SET_VALUE_ERROR + 1);
+    char* ptmp=pEntry->str_type;
+    copyItem(ptmp, p);
+    p=goFrontItem(p, 1);
+    if(!p) exit(SET_VALUE_ERROR + 2);
+    pEntry->Start=atoll(p);
+    p=goFrontItem(p, 1);
+    if(!p) exit(SET_VALUE_ERROR + 3);
+    pEntry->End=atoll(p);
+    p=goFrontItem(p, 2);
+    if(!p) exit(SET_VALUE_ERROR + 4);
+    pEntry->chain=((*p)=='+');
+}
+
+void BED::setValuePfNode(char *& pgoback, char *& pID, ProfileNode *& pPfN)
+{
+    auto *ptmp = (BasicEntry *)pPfN;
+    setValueBasic(pgoback, ptmp);
+
     pgoback=pID;
     for(int j=0;j<SEARCH_RANGE;j++, pID++)
         if((*pID)==';') break;
     memcpy(pPfN->ID, pgoback, (pID-pgoback));
     pPfN->ID[(pID-pgoback)]='\0';
+    pPfN->next= nullptr;
+    pPfN->single_tag=false;
+}
+
+void BED::setValueExtern(char *& p, ExternNode*& pEntry)
+{
+    auto *ptmp = (BasicEntry *)pEntry;
+    setValueBasic(p, ptmp);
 }
 
 char *BED::goFrontItem(char *p, int n)
@@ -483,6 +589,8 @@ void BED::bedfileClose()
 
 BED::~BED()
 {
+    if(do_single_analyse)
+        delete(set<string>*)sglist;
     bedfileClose();
 }
 
@@ -514,6 +622,8 @@ void BED::process(char *gff3file, char *outputfile, Method m)
                 _outputfile=outputfile;
             processProfile(gff3file);
             saveProfile(_outputfile.c_str());
+            _outputfile=string(bedname)+string(".gene.txt");
+            saveExternProfile(_outputfile.c_str());
             break;
         default:
             break;
@@ -829,7 +939,8 @@ void BED::saveProfile(const char *nameProfile)
     {
         if (fabs(profileList[i]->methy_ratio) <= 1e-15) continue;
         string str_chr;
-        switch (profileList[i]->chr) {
+        switch (profileList[i]->chr)
+        {
 #ifdef __CHR_CHL
             case MAX_CHR-4:
                 str_chr="CH";
@@ -873,10 +984,69 @@ void BED::saveProfile(const char *nameProfile)
         fprintf(fout, "\n");
     }
 #ifdef ALLOW_PLUG_IN_SAVE
-    string pli_save_name=nameProfile;
-    pli_save_name+=".m.txt";
-    LoadSavePlugInAndJmp(pli_save_name.c_str());
+    LoadSavePlugInAndJmp(nameProfile);
 #endif //!ALLOW_PLUG_IN_SAVE
+    fclose(fout);
+}
+
+void BED::saveExternProfile(const char *nameProfileEx)
+{
+    FILE* fout=fopen(nameProfileEx,"w");
+    if(fout== nullptr)
+    {
+        perror("fopen(): ");
+        exit(FILE_SAVE_ERROR + 0xC);
+    }
+    fprintf(fout,"chr\tGeneID_Type\tStart\tEnd\tStrand\tMethy_ratio");
+    fprintf(fout,"\n");
+    for(int i=0;i<geneNum;i++)
+    {
+        if (fabs(profileList[i]->methy_ratio) <= 1e-15 || !profileList[i]->single_tag) continue;
+        string str_chr;
+        switch (profileList[i]->chr)
+        {
+#ifdef __CHR_CHL
+            case MAX_CHR-4:
+                str_chr="CH";
+                break;
+#endif //!__CHR_CHL
+            case MAX_CHR - 3:
+                str_chr = "MT";
+                break;
+#ifdef __CHR_ZW
+                case MAX_CHR-2:
+                    str_chr="Z";
+                    break;
+                case MAX_CHR-1:
+                    str_chr="W";
+                    break;
+#else
+            case MAX_CHR - 2:
+                str_chr = "X";
+                break;
+            case MAX_CHR - 1:
+                str_chr = "Y";
+                break;
+#endif //!__CHR_ZW
+            default:
+                str_chr = to_string(profileList[i]->chr);
+                break;
+        }
+        fprintf(fout, "%s\t%s_%s\t%ld\t%ld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID, profileList[i]->str_type,
+                profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
+                profileList[i]->methy_ratio);
+        fprintf(fout, "\n");
+        ExternNode* p=profileList[i]->next;
+        while (true)
+        {
+            if(p== nullptr) break;
+            fprintf(fout, "%s\t%s_%s\t%ld\t%ld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID, p->str_type,
+                    p->Start, p->End, (p->chain) ? '+' : '-',
+                    p->methy_ratio);
+            fprintf(fout, "\n");
+            p=p->next;
+        }
+    }
     fclose(fout);
 }
 
@@ -986,4 +1156,33 @@ void BED::LoadSavePlugInAndJmp(const char* foutput)
     }
     (*saveas)(foutput, pThis->profileList, pThis->geneNum);
     dlclose(handle);
+}
+
+void BED::loadSingleList(char *listfile)
+{
+    ifstream list_in(listfile, ios::in);
+
+    auto* pset=new set<string>;
+    string str_buff;
+
+    if(!list_in.is_open())
+    {
+        perror("ifstream: ") ;
+        exit(FILE_OPEN_ERROR+0x11);
+    }
+
+    while(getline(list_in, str_buff))
+    {
+        if(str_buff.empty()) continue;
+        pset->insert(str_buff);
+    }
+
+    if(!pset->empty())
+    {
+        do_single_analyse=true;
+        sglist=pset;
+        /* To do. */
+    }
+
+    list_in.close();
 }

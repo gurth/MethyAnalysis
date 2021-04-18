@@ -2,6 +2,11 @@
 #include "bed.h"
 #include <getopt.h>
 #include <fstream>
+#include <ctype.h>
+#include <string.h>
+
+#include <string>
+#include <set>
 
 using namespace std;
 using namespace bed;
@@ -10,12 +15,13 @@ void usage()
 /* Explain usage. */
 {
     printf(
-            "MethyProfile v1 - Generating methylation profile.\n"
+            "MethyProfile v1.0 - Generating methylation profile.\n"
             "usage:\n"
-            "   bigBedToBed input.bed input.gff3 (output.methyprofile.txt)\n"
+            "   methyprofile [options] input.bed input.gff3 (output.methyprofile.txt)\n"
             "options:\n"
             "   -P, --promoter=n    - Analysing promoters methylation information with n bp. The default is 2000bp.\n"
             "   -l, --single-list   - Gathering single gene information for a gene list behind.\n"
+            "   -h, --help          - Show this message.\n"
     );
 }
 
@@ -32,12 +38,12 @@ int main(int argc,char **argv)
     static option long_options[]={
             {"promoter", optional_argument, nullptr, 'P'},
             {"single-list", required_argument, nullptr, 'l'},
+            {"help", no_argument, nullptr, 'h'},
             {0, 0, 0, 0}
     };
-    static const char simple_options[]="P::l:";
+    static const char simple_options[]="P::l:h";
     int longindex = -1;
     int opt;
-    ifstream flist;
 
     while (true)
     {
@@ -51,14 +57,12 @@ int main(int argc,char **argv)
                     bedfile.promoterLen = atoi(optarg+1);
                 break;
             case 'l':
-                flist.open(optarg+1, ios::in);
-                if(!flist.is_open())
-                {
-                    perror("fstream::open(): ");
-                    exit(FILE_OPEN_ERROR+0x10);
-                }
-                flist.close();
+                bedfile.loadSingleList(optarg+1);
                 break;
+            case 'h':
+                usage();
+                return 0;
+                break;    
             default:
                 printf("\033[31m[Error]\033[0m:Wrong argument.\n");
                 usage();

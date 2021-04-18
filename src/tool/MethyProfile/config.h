@@ -103,6 +103,21 @@
 /* Define this when you want to save CG number in profile.
  * */
 
+#define GENE_ID_BUFFER_LENGTH 0x20
+/* Define gene ID buffer length.
+ * Based on gene ID format.
+ * Not important.
+ * */
+
+#define ENTRY_TYPE_BUFFER_LENGTH 0X20
+/* Define the length of a entry type name. */
+
+#define GO_BACK_LENGTH 0x10
+/* When searching a string, the pointer may reach the edge of a block.
+ * So the pointer need to go back.
+ * The length must smaller than a line length.
+ * */
+
 #include "merror.h"
 
 #endif //!METHYPROFILE_CONFIG_H

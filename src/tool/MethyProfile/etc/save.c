@@ -4,13 +4,16 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <limits.h>
 
 extern "C"
 {
 
     void ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
     {
-        FILE* fout=fopen(nameProfile,"w");
+        char name_buff[NAME_MAX];
+        sprintf(name_buff, "%s.pro.txt", nameProfile);
+        FILE* fout=fopen(name_buff,"w");
         if(fout== nullptr)
         {
             perror("fopen(): ");
@@ -55,7 +58,9 @@ extern "C"
                     sprintf(str_chr, "%d",profileList[i]->chr);
                     break;
             }
-            fprintf(fout, "%s\t%s\t%ld\t%ld\t%c\t%.15lf", str_chr, profileList[i]->ID,
+            char buff[0x30];
+            sprintf(buff, "%s_promoter", profileList[i]->ID);
+            fprintf(fout, "%s\t%s\t%ld\t%ld\t%c\t%.15lf", str_chr, buff,
                     profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
                     profileList[i]->methy_ratio_promoter);
     #ifdef CG_NUMBER
