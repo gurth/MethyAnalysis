@@ -152,8 +152,8 @@ void BED::methyMining(ProfileNode *& pGene)
             ,pGene->NumCG
 #endif //!CG_NUMBER
     );
-    if(dtemp == -1) return;
-    pGene->methy_ratio=dtemp;
+    if(dtemp == -1) pGene->methy_ratio=0.0f;
+    else pGene->methy_ratio=dtemp;
 
     if(pThis->have_promoter)
     {
@@ -164,8 +164,8 @@ void BED::methyMining(ProfileNode *& pGene)
                             ,pGene->NumCG_promoter
                     #endif //!CG_NUMBER
                               );
-        if(dtemp == -1) return;
-        pGene->methy_ratio_promoter=dtemp;
+        if(dtemp == -1) pGene->methy_ratio_promoter=0.0f;
+        else pGene->methy_ratio_promoter=dtemp;
     }
 
     if(pThis->do_single_analyse && pGene->single_tag)
@@ -182,8 +182,8 @@ void BED::methyMining(ProfileNode *& pGene)
                     ,CG_tmp
 #endif //!CG_NUMBER
             );
-            if(dtemp == -1) return;
-            pEx->methy_ratio=dtemp;
+            if(dtemp == -1) pEx->methy_ratio=0.0f;
+            else pEx->methy_ratio=dtemp;
             pEx=pEx->next;
         }
     }
@@ -446,11 +446,12 @@ void BED::pthFuncProfileList()
                                         }
                                     NEXT__:
                                         p = goNextEntry(p);
-                                    }
+                                    } //! if(iter != pSet->end())
+
                                     p-=GO_BACK_LENGTH;
                                     pfNtmp->next=pExRoot;
                                 }
-                            }
+                            } //! if(iter != pSet->end())
 
                             MUTEX_LOCK(
                                     pThis->profileList[pThis->geneNum ++]=pfNtmp;
