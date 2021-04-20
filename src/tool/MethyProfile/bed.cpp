@@ -152,7 +152,11 @@ void BED::methyMining(ProfileNode *& pGene)
             ,pGene->NumCG
 #endif //!CG_NUMBER
     );
-    if(dtemp == -1) pGene->methy_ratio=0.0f;
+    if(dtemp == -1)
+    {
+        pGene->methy_ratio = 0.0f;
+        zlog_notice(pThis->zc,"getMethyRatio() return -1 when processing gene %s.", pGene->ID);
+    }
     else pGene->methy_ratio=dtemp;
 
     if(pThis->have_promoter)
@@ -164,7 +168,11 @@ void BED::methyMining(ProfileNode *& pGene)
                             ,pGene->NumCG_promoter
                     #endif //!CG_NUMBER
                               );
-        if(dtemp == -1) pGene->methy_ratio_promoter=0.0f;
+        if(dtemp == -1)
+        {
+            pGene->methy_ratio_promoter = 0.0f;
+            zlog_notice(pThis->zc,"getMethyRatio() return -1 when processing promoter of gene %s.", pGene->ID);
+        }
         else pGene->methy_ratio_promoter=dtemp;
     }
 
@@ -182,7 +190,12 @@ void BED::methyMining(ProfileNode *& pGene)
                     ,CG_tmp
 #endif //!CG_NUMBER
             );
-            if(dtemp == -1) pEx->methy_ratio=0.0f;
+            if(dtemp == -1)
+            {
+                pEx->methy_ratio=0.0f;
+                zlog_notice(pThis->zc,"getMethyRatio() return -1 when processing %s form %ld to %ld of gene %s.",
+                            pEx->str_type, pEx->Start, pEx->End, pGene->ID);
+            }
             else pEx->methy_ratio=dtemp;
             pEx=pEx->next;
         }
@@ -241,7 +254,8 @@ double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end
     }
     if(depth!=0)
         return (double)((double)mCdep / (double)depth);
-    return -1;
+    if(mCdep) return -1;
+    return 0;
 }
 
 void BED::pthFuncRaw()
@@ -547,19 +561,29 @@ char *BED::goFrontItem(char *p, int n)
     return nullptr;
 }
 
-
-BED::BED()
+void BED::init()
 {
     pThis= this;
     for(auto & i : chrList)
         i={(unsigned long)-1,0};
+    string zlogConf = XMACRO_STR(CMAKE_SOURCE_DIR);
+    zlogConf+="/etc/zlog_methyprofile.conf";
+    if(zlog_init(zlogConf.c_str()))
+    {
+        printf("\033[31m[Error]\033[0m:Zlog init failed.\n");
+        exit(ZLOG_ERROR);
+    }
+    zc = zlog_get_category("MethyProfile");
+}
+
+BED::BED()
+{
+    init();
 }
 
 BED::BED(char* bedfile)
 {
-    pThis= this;
-    for(auto & i : chrList)
-        i={(unsigned long)-1,0};
+    init();
     if(bedfile== nullptr)
         strcpy(bedname,"test.bed");
     else
@@ -605,6 +629,7 @@ BED::~BED()
     if(do_single_analyse)
         delete(set<string>*)sglist;
     bedfileClose();
+    zlog_fini();
 }
 
 void BED::process(char *outputfile, Method m)
@@ -617,8 +642,6 @@ void BED::process(char *gff3file, char *outputfile, Method m)
     clock_t t;
     t=clock();
     string _outputfile;
-
-    show_console_cursor(false);
 
     switch (m)
     {
@@ -645,8 +668,6 @@ void BED::process(char *gff3file, char *outputfile, Method m)
     printf("\n");
     t = clock() - t;
     printf("Total cost: %lf ms\n", ((float)t) / CLOCKS_PER_SEC * 1000);
-    // Show cursor
-    show_console_cursor(true);
 }
 
 void BED::processRaw()
@@ -1171,10 +1192,13 @@ bool BED::isdigit(int x)
 
 void BED::LoadSavePlugInAndJmp(const char* foutput)
 {
-    void *handle = dlopen("./etc/libsave.so", RTLD_LAZY);
+    string plug_in_name = XMACRO_STR(CMAKE_SOURCE_DIR);
+    plug_in_name+="/plug-in/libsave.so";
+    void *handle = dlopen(plug_in_name.c_str(), RTLD_LAZY);
+
     if(!handle)
     {
-        printf("%s", dlerror());
+        printf("\n\033[31m[Error]\033[0m: %s", dlerror());
         exit(FILE_OPEN_ERROR+0x20);
     }
     typedef void (*SaveAs)(const char*, ProfileNode**, int);
@@ -1228,7 +1252,7 @@ void BED::loadSingleList(char *listfile)
                     mkdir("single", 0755);
 #endif // !_WIN32_PLATFORM_
             if (mk == -1) {
-                printf("\033[31m[Error]\033[0m:Cannot create folder for single genes.\n");
+                printf("\033[31m[Error]\033[0m: Cannot create folder for single genes.\n");
                 exit(DIRECTORY_CREATE_ERROR);
             }
         }

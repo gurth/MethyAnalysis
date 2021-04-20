@@ -16,6 +16,12 @@
  * Mutex init error.
  * */
 
+#define ZLOG_ERROR 0x00a00
+/* The highest bit of the second byte is 1 means system error.
+ * ZLOG error.
+ * */
+
+
 #define FILE_OPEN_ERROR 0x00090
 /* The highest bit of the third byte is 1 means I/O error.
  * File open, read, map, etc. error.

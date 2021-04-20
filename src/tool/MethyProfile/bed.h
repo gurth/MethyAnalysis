@@ -12,7 +12,7 @@
 #include <limits.h>
 
 #include <indicators/block_progress_bar.hpp>
-#include <indicators/cursor_control.hpp>
+#include <zlog.h>
 
 namespace bed
 {
@@ -22,6 +22,9 @@ namespace bed
         __CODE \
         (__MUTEX).unlock();                                                               \
     /* Lock and unlock __CODE in thread function. */
+
+    #define MACRO_STR(x) #x
+    #define XMACRO_STR(s) MACRO_STR(s)
 
     enum class Method {raw, tag, profile};
     /*  Define the operation method. */
@@ -65,12 +68,16 @@ namespace bed
         };
         int fileHandle = -1;            /* File handle of bed file. */
         int indexHandle = -1;           /* File handle of gff3 file. */
+        zlog_category_t *zc = nullptr;  /* zlog category, for log file output*/
         std::vector<BlockListNode>blockList;    /* Block list of bed file. */
         BlockListNode chrList[MAX_CHR];         /* Chromosome list in the form of blockList. */
         ProfileNode* profileList[MAX_GENE]={nullptr};
                                         /* Profile list, you can see ProfileNode definition above. */
         std::mutex mtx;          /* Global mutex of thread. */
     private:
+        void init();
+            /* General initialization operation. */
+
         inline void processRaw();
             /* Process bed file with Method::raw, which means byte manipulation directly.
              * Always use to test the performance of this program. */
