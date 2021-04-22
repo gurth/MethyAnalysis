@@ -8,7 +8,7 @@ build: libsave.so
 	cp libsave.so $(CMAKE_SOURCE_DIR_)/plug-in/
 
 libsave.so: save.c ../../profile_node.h $(CMAKE_SOURCE_DIR_)/include/config.h
-	g++ -std=c++11 -fPIC -shared -o libsave.so save.c $(CMAKE_SOURCE_DIR_)/include/config.h ../../profile_node.h
+	g++ -std=c++11 -fPIC -shared -I $(CMAKE_SOURCE_DIR_)/include -o libsave.so save.c
 
 clean:
 	rm -rf libsave.so $(CMAKE_SOURCE_DIR_)/plug-in/libsave.so

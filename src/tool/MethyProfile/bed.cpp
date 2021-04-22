@@ -1057,6 +1057,7 @@ void BED::saveProfile(const char *nameProfile)
 #ifdef CG_NUMBER
         fprintf(fout, "\t%ld", profileList[i]->NumCG);
 #endif //!CG_number
+/*
         if (have_promoter)
         {
             fprintf(fout, "\t%.15lf", profileList[i]->methy_ratio_promoter);
@@ -1064,6 +1065,7 @@ void BED::saveProfile(const char *nameProfile)
             fprintf(fout, "\t%ld", profileList[i]->NumCG_promoter);
 #endif //!CG_number
         }
+*/
         fprintf(fout, "\n");
     }
 #ifdef ALLOW_PLUG_IN_SAVE
