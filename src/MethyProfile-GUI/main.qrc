@@ -1,0 +1,10 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource>
+        <file>res/methyprofile.svg</file>
+        <file>res/methyprofile_title.png</file>
+        <file>res/methyprofile_128.png</file>
+		<file>res/methyprofile_64.png</file>
+        <file>res/methyprofile_48.png</file>
+    </qresource>
+</RCC>

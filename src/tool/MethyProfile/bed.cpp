@@ -9,8 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <thread>
-#include <mutex>
 #include <unistd.h>
 #include <time.h>
 #include <vector>
@@ -37,7 +35,10 @@
 
 using namespace std;
 using namespace bed;
+
+#ifdef INDICATOR_PROGRESS_BAR
 using namespace indicators;
+#endif // !INDICATOR_PROGRESS_BAR
 
 bool cmpChrList(BlockListNode* pa, BlockListNode* pb)
 {
@@ -52,6 +53,27 @@ bool cmpProfileList(ProfileNode* pa, ProfileNode* pb)
 }
 
 BED* BED::pThis = nullptr;
+
+void BED::m_setProgress(double progress)
+{
+#ifdef INDICATOR_PROGRESS_BAR
+    pThis->bar.set_progress(progress);
+#endif //!INDICATOR_PROGRESS_BAR
+}
+
+void BED::m_initProgress(double progress, const char* info)
+{
+#ifdef INDICATOR_PROGRESS_BAR
+    pThis->bar.set_option(indicators::option::PostfixText{info});
+    pThis->bar.set_progress(0);
+#endif //!INDICATOR_PROGRESS_BAR
+}
+
+
+void BED::m_errorExit(int m_error)
+{
+    exit(m_error);
+}
 
 void BED::dichotomySearchChr(char* m_beg, char* m_end)
 {
@@ -147,7 +169,7 @@ void BED::methyMining(ProfileNode *& pGene)
         if(*(m_end)=='\n') break;
     m_end++;
 
-    dtemp = getMethyRatio(m_beg, m_end, pGene->Start, pGene->End, pGene->ID, pGene->single_tag, pGene->chain
+    dtemp = getMethyRatio(m_beg, m_end, pGene->Start, pGene->End, pGene->ID, pGene->single_tag, false, pGene->chain
 #ifdef CG_NUMBER
             ,pGene->NumCG
 #endif //!CG_NUMBER
@@ -163,7 +185,7 @@ void BED::methyMining(ProfileNode *& pGene)
     {
         dtemp = getMethyRatio(m_beg, m_end
                               , (pGene->Start < pThis->promoterLen) ? 0 : pGene -> Start - pThis -> promoterLen
-                              , pGene->Start, pGene->ID, false, pGene->chain
+                              , pGene->Start, pGene->ID, pGene->single_tag, true, pGene->chain
                     #ifdef CG_NUMBER
                             ,pGene->NumCG_promoter
                     #endif //!CG_NUMBER
@@ -185,7 +207,7 @@ void BED::methyMining(ProfileNode *& pGene)
 #ifdef CG_NUMBER
             size_t CG_tmp = 0;
 #endif //!CG_NUMBER
-            dtemp = getMethyRatio(m_beg, m_end, pEx->Start, pEx->End, nullptr, false, pEx->chain
+            dtemp = getMethyRatio(m_beg, m_end, pEx->Start, pEx->End, nullptr, false, false, pEx->chain
 #ifdef CG_NUMBER
                     ,CG_tmp
 #endif //!CG_NUMBER
@@ -202,7 +224,7 @@ void BED::methyMining(ProfileNode *& pGene)
     }
 }
 
-double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end, char* ID, bool single_tag, bool chain
+double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end, char* ID, bool single_tag, bool ispromoter, bool chain
 #ifdef CG_NUMBER
 , unsigned long& cg_numb
 #endif // CG_NUMBER
@@ -224,8 +246,11 @@ double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end
     else if(!pGbeg && !pGend)
         return -1;
 
-    if(pThis->do_single_analyse && single_tag) saveSingleData(pGbeg, pGend, ID);
-
+    if(pThis->do_single_analyse && single_tag)
+    {
+        if(ispromoter) saveSingleData(pGbeg, pGend, ID, "_promoter");
+        else saveSingleData(pGbeg, pGend, ID);
+    }
     /* Calculate methylation ratio. */
     size_t depth = 0, mCdep = 0;
     p=pGbeg;
@@ -286,7 +311,7 @@ void BED::pthFuncRaw()
     }
 #endif //!_FLAG_TEST
 
-#ifdef SHOW_PROGRESSBAR
+#ifdef INDICATOR_PROGRESS_BAR
     char buff[0x30];
     sprintf(buff,"Processed %ld / %ld",pThis->sum,pThis->sb.st_size);
     MUTEX_LOCK(
@@ -296,7 +321,7 @@ void BED::pthFuncRaw()
         ,
         pThis->mtx
     )
-#endif //!SHOW_PROGRESSBAR
+#endif //!INDICATOR_PROGRESS_BAR
 }
 
 void BED::pthFuncTag()
@@ -318,7 +343,7 @@ void BED::pthFuncTag()
 #ifdef SHOW_PROGRESSBAR
     MUTEX_LOCK(
         pThis->progress+=pThis->progUnit;
-        pThis->bar.set_progress(pThis->progress);
+        pThis->setProgress(pThis->progress);
         ,
         pThis->mtx
     )
@@ -346,7 +371,7 @@ void BED::pthFuncBlockList()
 #ifdef SHOW_PROGRESSBAR
     MUTEX_LOCK(
             pThis->progress+=pThis->progUnit;
-            pThis->bar.set_progress(pThis->progress);
+            pThis->setProgress(pThis->progress);
             ,
             pThis->mtx
         )
@@ -371,7 +396,7 @@ void BED::pthFuncProfile()
 #ifdef SHOW_PROGRESSBAR
         MUTEX_LOCK(
             pThis->progress+=pThis->progUnit;
-            pThis->bar.set_progress(pThis->progress);
+                pThis->setProgress(pThis->progress);
             ,
             pThis->mtx
         )
@@ -448,6 +473,7 @@ void BED::pthFuncProfileList()
                                         if(p>pend) break;
                                         pExBuff=(ExternNode*)malloc(sizeof(ExternNode));
                                         setValueExtern(p, pExBuff);
+                                        pExBuff->next= nullptr;
                                         if(!pExRoot)
                                         {
                                             pExRoot=pExBuff;
@@ -482,7 +508,7 @@ void BED::pthFuncProfileList()
 #ifdef SHOW_PROGRESSBAR
     MUTEX_LOCK(
             pThis->progress+=pThis->progUnit;
-            pThis->bar.set_progress(pThis->progress);
+            pThis->setProgress(pThis->progress);
             ,
             pThis->mtx
             )
@@ -510,17 +536,17 @@ void BED::setValueBasic(char *&p, BasicEntry *&pEntry)
 {
     pEntry->chr=atoiChr(p);
     p=goFrontItem(p, 2);
-    if(!p) exit(SET_VALUE_ERROR + 1);
+    if(!p) pThis->errorExit(SET_VALUE_ERROR + 1);
     char* ptmp=pEntry->str_type;
     copyItem(ptmp, p);
     p=goFrontItem(p, 1);
-    if(!p) exit(SET_VALUE_ERROR + 2);
+    if(!p) pThis->errorExit(SET_VALUE_ERROR + 2);
     pEntry->Start=atoll(p);
     p=goFrontItem(p, 1);
-    if(!p) exit(SET_VALUE_ERROR + 3);
+    if(!p) pThis->errorExit(SET_VALUE_ERROR + 3);
     pEntry->End=atoll(p);
     p=goFrontItem(p, 2);
-    if(!p) exit(SET_VALUE_ERROR + 4);
+    if(!p) pThis->errorExit(SET_VALUE_ERROR + 4);
     pEntry->chain=((*p)=='+');
 }
 
@@ -565,13 +591,17 @@ void BED::init()
 {
     pThis= this;
     for(auto & i : chrList)
-        i={(unsigned long)-1,0};
+    {
+        i.base=-1;
+        i.length=0;
+    }
+    if(!errorExit) errorExit=m_errorExit;
     string zlogConf = XMACRO_STR(CMAKE_SOURCE_DIR);
     zlogConf+="/etc/zlog_methyprofile.conf";
     if(zlog_init(zlogConf.c_str()))
     {
         printf("\033[31m[Error]\033[0m:Zlog init failed.\n");
-        exit(ZLOG_ERROR);
+        errorExit(ZLOG_ERROR);
     }
     zc = zlog_get_category("MethyProfile");
 }
@@ -591,20 +621,27 @@ BED::BED(char* bedfile)
     bedfileOpen(bedname);
 }
 
+BED::BED(p_errorExit m_errorEx)
+{
+    errorExit=m_errorEx;
+    init();
+}
+
+
 void BED::bedfileOpen(const char * bedfile)
 {
     // Open file
     if((fileHandle = open(bedfile, O_RDWR)) < 0)
     {
         perror("open(): ") ;
-        exit(FILE_OPEN_ERROR+1);
+        errorExit(FILE_OPEN_ERROR+1);
     }
 
     // Get file stat
     if((fstat(fileHandle, &sb)) == -1 )
     {
         perror("fstat(): ") ;
-        exit(FILE_OPEN_ERROR+2);
+        errorExit(FILE_OPEN_ERROR+2);
     }
 
     strcpy(this->bedname, bedfile);
@@ -614,7 +651,7 @@ void BED::bedfileOpen(const char * bedfile)
     if(mapped == (char*)-1)
     {
         perror("mmap(): ") ;
-        exit(FILE_OPEN_ERROR+3);
+        errorExit(FILE_OPEN_ERROR+3);
     }
 }
 
@@ -632,16 +669,27 @@ BED::~BED()
     zlog_fini();
 }
 
-void BED::process(char *outputfile, Method m)
+void BED::process(const char *outputfile, Method m)
 {
     process(nullptr, outputfile, m);
 }
 
-void BED::process(char *gff3file, char *outputfile, Method m)
+void BED::processInit()
+{
+    if(!setProgress || !initProgress)
+    {
+        setProgress=m_setProgress;
+        initProgress=m_initProgress;
+    }
+}
+
+void BED::process(const char *gff3file, const char *outputfile, Method m)
 {
     clock_t t;
     t=clock();
     string _outputfile;
+
+    processInit();
 
     switch (m)
     {
@@ -660,6 +708,9 @@ void BED::process(char *gff3file, char *outputfile, Method m)
             saveProfile(_outputfile.c_str());
             _outputfile=string(bedname)+string(".gene.txt");
             saveExternProfile(_outputfile.c_str());
+#ifdef SHOW_PROGRESSBAR
+            setProgress(100.0f);
+#endif //!SHOW_PROGRESSBAR
             break;
         default:
             break;
@@ -667,7 +718,8 @@ void BED::process(char *gff3file, char *outputfile, Method m)
 
     printf("\n");
     t = clock() - t;
-    printf("Total cost: %lf ms\n", ((float)t) / CLOCKS_PER_SEC * 1000);
+    latest_time_cost= ((float)t) / CLOCKS_PER_SEC * 1000;
+    printf("Total cost: %lf ms\n", latest_time_cost);
 }
 
 void BED::processRaw()
@@ -685,8 +737,7 @@ void BED::processRaw()
 #ifdef SHOW_PROGRESSBAR
     progUnit=(double)(100.0 / (sb.st_size / BLOCK_SIZE +1));
     sprintf(buff,"Processed 0 / %ld",sb.st_size);
-    bar.set_option(indicators::option::PostfixText{buff});
-    bar.set_progress(0);
+    initProgress(0.0f, buff);
 #endif //!SHOW_PROGRESSBAR
     base_offset=0;
 
@@ -723,8 +774,7 @@ void BED::processTag()
     printf("\033[33m[Warning]\033[0m: Start tagging ...\n");
 #ifdef SHOW_PROGRESSBAR
     sprintf(buff,"Building block list");
-    bar.set_option(indicators::option::PostfixText{buff});
-    bar.set_progress(0);
+    initProgress(0.0f, buff);
 #endif //!SHOW_PROGRESSBAR
     readNum=sb.st_size / BLOCK_READ;
     restSize=sb.st_size % BLOCK_READ;
@@ -776,8 +826,7 @@ void BED::processTag()
 
 #ifdef SHOW_PROGRESSBAR
     sprintf(buff,"Tagging");
-    bar.set_option(indicators::option::PostfixText{buff});
-    pThis->bar.set_progress(25.0);
+    initProgress(25.0f, buff);
 #endif //!SHOW_PROGRESSBAR
 
     nodeNum = 0;
@@ -811,6 +860,7 @@ void BED::processTag()
     for(int i=0;i<pTmpList.size()-1;i++)
         pTmpList[i]->length=pTmpList[i+1]->base-pTmpList[i]->base;
     pTmpList[pTmpList.size()-1]->length=sb.st_size-pTmpList[pTmpList.size()-1]->base;
+    pTmpList.clear();
 }
 
 void BED::savechrList()
@@ -822,7 +872,7 @@ void BED::savechrList()
     if(!out.is_open())
     {
         perror("ofstream: ") ;
-        exit(FILE_SAVE_ERROR);
+        errorExit(FILE_SAVE_ERROR);
     }
     out << "# chr base  length" << endl;
     for(int i=1;i<MAX_CHR-3;i++)
@@ -850,25 +900,25 @@ void BED::savechrList()
     out.close();
 }
 
-void BED::processProfile(char *&gff3file)
+void BED::processProfile(const char *&gff3file)
 {
     if((indexHandle = open(gff3file, O_RDWR)) < 0)
     {
         perror("gff3 open(): ") ;
-        exit(FILE_OPEN_ERROR + 0xA);
+        errorExit(FILE_OPEN_ERROR + 0xA);
     }
 
     if((fstat(indexHandle, &sbIndex)) == -1 )
     {
         perror("gff3 fstat(): ") ;
-        exit(FILE_OPEN_ERROR + 0xB);
+        errorExit(FILE_OPEN_ERROR + 0xB);
     }
 
     mappedIndex = (char*)mmap(nullptr, sbIndex.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, indexHandle, 0);
     if(mappedIndex == (char*)-1)
     {
         perror("gff3 mmap(): ") ;
-        exit(FILE_OPEN_ERROR + 0xC);
+        errorExit(FILE_OPEN_ERROR + 0xC);
     }
     // Build up profile list
 
@@ -882,8 +932,7 @@ void BED::processProfile(char *&gff3file)
 
 #ifdef SHOW_PROGRESSBAR
     sprintf(buff,"Indexing");
-    bar.set_option(indicators::option::PostfixText{buff});
-    bar.set_progress(0);
+    initProgress(0.0f, buff);
     progress=0;
     progUnit=(double)(25.0 / (sbIndex.st_size / BLOCK_SIZE_INDEX +1));
 #endif //!SHOW_PROGRESSBAR
@@ -921,7 +970,7 @@ void BED::processProfile(char *&gff3file)
 
 #ifdef SHOW_PROGRESSBAR
     sprintf(buff,"Processing");
-    bar.set_option(indicators::option::PostfixText{buff});
+    initProgress(progress, buff);
     progUnit=(double)((100.0 - progress) / geneNum);
 #endif //!SHOW_PROGRESSBAR
 
@@ -955,7 +1004,7 @@ void BED::saveProfile(const char *nameProfile)
     if(fout== nullptr)
     {
         perror("fopen(): ");
-        exit(FILE_SAVE_ERROR + 0xA);
+        errorExit(FILE_SAVE_ERROR + 0xA);
     }
     fprintf(fout,"chr\tID\tStart\tEnd\tStrand\tMethy_ratio");
 #ifdef CG_NUMBER
@@ -1029,7 +1078,7 @@ void BED::saveExternProfile(const char *nameProfileEx)
     if(fout== nullptr)
     {
         perror("fopen(): ");
-        exit(FILE_SAVE_ERROR + 0xC);
+        errorExit(FILE_SAVE_ERROR + 0xC);
     }
     fprintf(fout,"chr\tGeneID\tType\tStart\tEnd\tStrand\tMethy_ratio");
     fprintf(fout,"\n");
@@ -1086,15 +1135,20 @@ void BED::saveExternProfile(const char *nameProfileEx)
 
 void BED::saveSingleData(char *m_beg, char *m_end, char *ID)
 {
+    saveSingleData(m_beg, m_end, ID, "");
+}
+
+void BED::saveSingleData(char *m_beg, char *m_end, char *ID, const char* suffix)
+{
     if(!ID) return;
     char name_buff[NAME_MAX]={0};
-    sprintf(name_buff, "./single/%s", ID);
+    sprintf(name_buff, "./single/%s%s", ID, suffix);
 
     FILE* sgf= fopen(name_buff, "wb");
     if(sgf == nullptr)
     {
         perror("fopen(): ");
-        exit(FILE_SAVE_ERROR + 0xd);
+        pThis->errorExit(FILE_SAVE_ERROR + 0xd);
     }
 
     fprintf(sgf, "#chr\tstart\tend\tstrand\tmCtype\tdepth\tmCdep\tlevel\n");
@@ -1199,7 +1253,7 @@ void BED::LoadSavePlugInAndJmp(const char* foutput)
     if(!handle)
     {
         printf("\n\033[31m[Error]\033[0m: %s", dlerror());
-        exit(FILE_OPEN_ERROR+0x20);
+        pThis->errorExit(FILE_OPEN_ERROR+0x20);
     }
     typedef void (*SaveAs)(const char*, ProfileNode**, int);
     SaveAs saveas=(SaveAs)dlsym(handle,"ProfileSave");
@@ -1207,43 +1261,38 @@ void BED::LoadSavePlugInAndJmp(const char* foutput)
     {
         printf("%s", dlerror());
         dlclose(handle);
-        exit(MUTEX_ERROR+0x10);
+        pThis->errorExit(MUTEX_ERROR+0x10);
     }
     (*saveas)(foutput, pThis->profileList, pThis->geneNum);
     dlclose(handle);
 }
 
-void BED::loadSingleList(char *listfile)
-{
+void BED::loadSingleList(const char *listfile) {
     ifstream list_in(listfile, ios::in);
 
-    auto* pset=new set<string>;
+    auto *pset = new set<string>;
     string str_buff;
 
-    if(!list_in.is_open())
-    {
-        perror("ifstream: ") ;
-        exit(FILE_OPEN_ERROR+0x11);
+    if (!list_in.is_open()) {
+        perror("ifstream: ");
+        errorExit(FILE_OPEN_ERROR + 0x11);
     }
 
-    while(getline(list_in, str_buff))
-    {
-        if(str_buff.empty()) continue;
+    while (getline(list_in, str_buff)) {
+        if (str_buff.empty()) continue;
         pset->insert(str_buff);
     }
 
-    if(!pset->empty())
-    {
-        do_single_analyse=true;
-        sglist=pset;
+    if (!pset->empty()) {
+        do_single_analyse = true;
+        sglist = pset;
         /* To do. */
-        int acc=
+        int acc =
 #ifdef _WIN32_PLATFORM_
                 _access("single", 0);
 #elif defined(_UNIX_PLATFORM_)
                 access("single", 0);
-        if(acc==-1)
-        {
+        if (acc == -1) {
 #endif // !_WIN32_PLATFORM_
             int mk =
 #ifdef _WIN32_PLATFORM_
@@ -1253,7 +1302,7 @@ void BED::loadSingleList(char *listfile)
 #endif // !_WIN32_PLATFORM_
             if (mk == -1) {
                 printf("\033[31m[Error]\033[0m: Cannot create folder for single genes.\n");
-                exit(DIRECTORY_CREATE_ERROR);
+                errorExit(DIRECTORY_CREATE_ERROR);
             }
         }
     }

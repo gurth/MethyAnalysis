@@ -84,16 +84,6 @@
 //#define SHOW_ALL_INFO
 /* Show all information, which include how many bytes have been processed. */
 
-#define SHOW_PROGRESSBAR
-/* Show the progress bar. */
-
-#define PROMOTER_LENGTH 2000
-/* Promoter length at the front of gene. If you use -p option in arguments,
- * promoter methy fation will be output in profile.
- * Custom.
- * You can change it if needed. Default to 2000.
- * */
-
 #define ALLOW_PLUG_IN_SAVE   /* Beta */
 /* Define this if you want to use advanced feature of this program to save
  * profile. If you not sure about this, please ture it down.
@@ -117,6 +107,16 @@
  * So the pointer need to go back.
  * The length must smaller than a line length.
  * */
+
+#define PROMOTER_LENGTH 2000
+/* Promoter length at the front of gene. If you use -p option in arguments,
+ * promoter methy fation will be output in profile.
+ * Custom.
+ * You can change it if needed. Default to 2000.
+ * */
+
+#define SHOW_PROGRESSBAR
+/* Show the progress bar. */
 
 #include "merror.h"
 

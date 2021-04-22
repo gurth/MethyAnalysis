@@ -18,11 +18,14 @@ ELSEIF (APPLE OR UNIX)
 ENDIF ()
 
 ADD_DEFINITIONS(-D CMAKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+ADD_DEFINITIONS(-D CMAKE_CURRENT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+ADD_DEFINITIONS(-D MY_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/my_config.h")
 
 SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/plug-in/libsave.so")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/plug-in/libsave")
 
-add_executable(methyprofile main.cpp bed.cpp bed.h config.h merror.h profile_node.h)
+add_executable(methyprofile main.cpp bed.cpp bed.h profile_node.h my_config.h)
 
 target_link_libraries(methyprofile dl ${CMAKE_THREAD_LIBS_INIT} libzlog.so)

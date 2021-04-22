@@ -121,10 +121,11 @@ CMakeFiles
 CMakeScripts
 Testing
 Makefile
-!/etc/Makefile
 cmake_install.cma
 install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
 cmake-build-debug/
 cmake-build-release/
+
+bak/

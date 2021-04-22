@@ -10,24 +10,39 @@
 
 #include <sys/stat.h>
 #include <limits.h>
+#include <thread>
+#include <mutex>
+#include <vector>
+
+#include <zlog.h>
+
+#define MACRO_STR(x) #x
+#define XMACRO_STR(s) MACRO_STR(s)
+
+#include <config.h>
+
+#include XMACRO_STR(MY_CONFIG_PATH)
+
+#ifdef INDICATOR_PROGRESS_BAR
 
 #include <indicators/block_progress_bar.hpp>
-#include <zlog.h>
+
+#endif //! INDICATOR_PROGRESS_BAR
 
 namespace bed
 {
-    #include "config.h"
-
     #define MUTEX_LOCK(__CODE, __MUTEX)  (__MUTEX).lock(); \
         __CODE \
         (__MUTEX).unlock();                                                               \
     /* Lock and unlock __CODE in thread function. */
 
-    #define MACRO_STR(x) #x
-    #define XMACRO_STR(s) MACRO_STR(s)
-
     enum class Method {raw, tag, profile};
     /*  Define the operation method. */
+
+    typedef void (*p_setProgress)(double);
+    typedef void (*p_initProgress)(double, const char*);
+
+    typedef void (*p_errorExit)(int);
 
     struct BlockListNode
             /* Block list item structure. Show the block's information. */
@@ -53,6 +68,7 @@ namespace bed
         int geneNum = 0;                /* Sum of gene number. */
         double progress = 0.0f;         /* Processing progress. */
         double progUnit=0.0f;           /* Progress unit. */
+#ifdef INDICATOR_PROGRESS_BAR
         indicators::BlockProgressBar bar     /* Progress bar. For details, please refer to
                                         * https://github.com/p-ranav/indicators.*/
         {
@@ -66,6 +82,7 @@ namespace bed
             indicators::option::ForegroundColor{indicators::Color::green},
             indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}
         };
+#endif // !INDICATOR_PROGRESS_BAR
         int fileHandle = -1;            /* File handle of bed file. */
         int indexHandle = -1;           /* File handle of gff3 file. */
         zlog_category_t *zc = nullptr;  /* zlog category, for log file output*/
@@ -78,6 +95,9 @@ namespace bed
         void init();
             /* General initialization operation. */
 
+        void processInit();
+            /* Inittation when process start.*/    
+
         inline void processRaw();
             /* Process bed file with Method::raw, which means byte manipulation directly.
              * Always use to test the performance of this program. */
@@ -89,7 +109,7 @@ namespace bed
              * Please notice that if you want to import chromosome list from file directly,
              * make sure the file is named as $(YOUR_BED_FILE_NAME).tag. */
 
-        inline void processProfile(char*& gff3file);
+        inline void processProfile(const char*& gff3file);
             /* Process bed file and generate profile based on gff3 file.
              * Only support gff3 format.
              * The profile can be saved with saveProfile(). */
@@ -139,7 +159,8 @@ namespace bed
              * This function can calculate methylation ratio of every entry based on bed file.
              * */
 
-        static inline double getMethyRatio(char* m_beg, char* m_end, size_t p_start, size_t p_end, char* ID, bool single_tag, bool chain
+        static inline double getMethyRatio(char* m_beg, char* m_end, size_t p_start, size_t p_end, char* ID,
+                                           bool single_tag, bool ispromoter, bool chain
         #ifdef CG_NUMBER
                     , unsigned long& cg_numb
         #endif // CG_NUMBER
@@ -191,6 +212,18 @@ namespace bed
         static void saveSingleData(char* m_beg, char* m_end, char* ID);
             /* Save single gene information as BED format. */
 
+        static void saveSingleData(char* m_beg, char* m_end, char* ID, const char* suffix);
+            /* Save single gene information as BED format. */    
+
+        static void m_setProgress(double m_progress);
+            /* Setting progress of progress bar.*/
+
+        static void m_initProgress(double m_progress, const char* info);
+            /* Initiation of progress bar. */
+
+        static void m_errorExit(int m_error);
+            /* Exit program with error code m_error. */
+
 #ifdef ALLOW_PLUG_IN_SAVE
         static inline void LoadSavePlugInAndJmp(const char* foutput);
             /* Load plug in save add execute it.*/
@@ -207,23 +240,32 @@ namespace bed
         size_t promoterLen = PROMOTER_LENGTH;
             /* Search range of promoters. */
         void* sglist = nullptr;
-            /* Single gene list which is pending analysis.*/    
+            /* Single gene list which is pending analysis.*/  
+        p_initProgress initProgress = nullptr;
+            /* Pointer to re-call function for initiation of progress bar. */
+        p_setProgress setProgress = nullptr; 
+            /* Pointer to re-call function for setting progress of progress bar. */
+        p_errorExit errorExit = nullptr;
+            /* Pointer to re-call function for exiting with error code. */
+        double latest_time_cost = 0;
+            /* Time cost of latest operation. */
     public:
         BED();                  /* Constructor without opening and mapping file.*/
         BED(char *bedfile);     /* Constructor with opening and mapping file.*/
+        BED(p_errorExit m_errorEx); /* Constructor with outside error parsing. */
         void bedfileOpen(const char* bedfile);
             /* Open bed file an map it to memory. */
 
         void bedfileClose();
             /* Close bed file unmap it from memory. */
 
-        void process(char* outputfile, Method m);
+        void process(const char* outputfile, Method m);
             /* Main process of this class.
              * outputfile: Profile will save with outputfile if m is Method::profile.
              *             Default or in other method this value is nullptr.
              * m: Process Method.*/
 
-        void process(char* gff3file, char* outputfile, Method m);
+        void process(const char* gff3file, const char* outputfile, Method m);
             /* Main process of this class.
              * gff3file: GFF3 file name.
              * outputfile: Profile will save with outputfile if m is Method::profile.
@@ -243,7 +285,7 @@ namespace bed
              * If nameProfileEx == nullptr, profile list will be saved as
              * $(YOUR_BED_FILE_NAME).gene.txt */
 
-        void loadSingleList(char* listfile);    
+        void loadSingleList(const char* listfile);
             /* Load single list from file.
              * This function will load information from file and init relative data structure.
              * */
