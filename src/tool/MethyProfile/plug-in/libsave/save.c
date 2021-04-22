@@ -1,5 +1,5 @@
-#include "../../config.h"
-#include "../../profile_node.h"
+#include "config.h"
+#include "profile_node.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
