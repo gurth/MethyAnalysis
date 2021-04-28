@@ -2,8 +2,10 @@
 #include "./ui_mainwindow.h"
 #include <QFileDialog>
 #include <QMessageBox>
+#include "my_config.h"
+#include "my_error.hpp"
 
-MainWindow* MainWindow::pThis = nullptr;
+m_Interface* m_Interface::pThis=nullptr;
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -22,10 +24,17 @@ void MainWindow::init()
 
     m_progressbar=ui->m_progressBar;
     m_labelstatus=ui->m_labelStatus;
+
+    connect(&mInf, &m_Interface::send_error, this, &MainWindow::rev_error);
+
+    connect(&mInf, &m_Interface::send_setProgress, this, &MainWindow::rev_setProgress);
+    connect(&mInf, &m_Interface::send_setMsg, this, &MainWindow::rev_setMsg);
+    connect(&mInf, &m_Interface::send_msgBox, this, &MainWindow::rev_msgBox);
 }
 
 MainWindow::~MainWindow()
 {
+    mInf.wait();
     delete ui;
 }
 
@@ -142,12 +151,53 @@ void MainWindow::on_m_pushButtonStart_clicked()
             return;
         }
     }
-    MethyProfileInterface(
-                bedfileName.toLocal8Bit().data(),
-                gff3fileName.toLocal8Bit().data(),
-                outfileName.toLocal8Bit().data(),
-                have_promoter,
-                length_promoter,
-                do_single_analysis,
-                listfileName.toLocal8Bit().data());
+
+    try
+    {
+        mInf.set_arg(
+                    bedfileName.toLocal8Bit().data(),
+                    gff3fileName.toLocal8Bit().data(),
+                    outfileName.toLocal8Bit().data(),
+                    have_promoter,
+                    length_promoter,
+                    do_single_analysis,
+                    listfileName.toLocal8Bit().data());
+        mInf.start();
+    }
+    catch (const e_ErrorCode& ex)
+    {
+        QMessageBox::critical(NULL,  "Error",  ex.what(), QMessageBox::Yes, QMessageBox::Yes);
+        return;
+    }
+
+}
+
+void MainWindow::rev_setMsg(const char *info)
+{
+    ui->m_labelStatus->setText(info);
+}
+
+void MainWindow::rev_msgBox(const char *info)
+{
+    QMessageBox message(QMessageBox::NoIcon,  "Result",  info);
+    message.setIconPixmap(QPixmap(":/res/methyprofile_64.png"));
+    int rsl=message.exec();
+}
+
+void MainWindow::rev_error(int m_error)
+{
+    char msg_buff[MAX_INFO]={0};
+    sprintf(msg_buff, "Unexpect exit with error code %d. \n", m_error);
+    QMessageBox::critical(NULL,  "Error",  msg_buff, QMessageBox::Yes, QMessageBox::Yes);
+    switch (m_error)
+    {
+        default:
+            break;
+    }
+    throw e_ErrorCode(m_error);
+}
+
+void MainWindow::rev_setProgress(int progress)
+{
+    ui->m_progressBar->setValue(progress);
 }

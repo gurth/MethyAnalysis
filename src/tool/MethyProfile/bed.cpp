@@ -2,14 +2,11 @@
 // Created by gurth on 3/11/21.
 //
 
-#include <sys/mman.h>
-#include <sys/types.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <unistd.h>
 #include <time.h>
 #include <vector>
 #include <string>
@@ -19,19 +16,22 @@
 #include "bed.h"
 
 #ifdef ALLOW_PLUG_IN_SAVE
+
+#ifdef _UNIX_PLATFORM_
 #include <dlfcn.h>
+#endif // _UNIX_PLATFORM_
+
 #endif //!ALLOW_PLUG_IN_SAVE
 
-#ifdef _WIN32_PLATFORM_
+#ifdef _UNIX_PLATFORM_
 
-#include <direct.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <io.h>
+#include <direct.h>
 
-#elif defined(_UNIX_PLATFORM_)
-
-#include <sys/stat.h>
-
-#endif // !_WIN32_PLATFORM_
+#endif // _UNIX_PLATFORM_
 
 using namespace std;
 using namespace bed;
@@ -177,7 +177,9 @@ void BED::methyMining(ProfileNode *& pGene)
     if(dtemp == -1)
     {
         pGene->methy_ratio = 0.0f;
+#ifdef ENABLE_LOG
         zlog_notice(pThis->zc,"getMethyRatio() return -1 when processing gene %s.", pGene->ID);
+#endif //!ENABLE_LOG
     }
     else pGene->methy_ratio=dtemp;
 
@@ -193,7 +195,9 @@ void BED::methyMining(ProfileNode *& pGene)
         if(dtemp == -1)
         {
             pGene->methy_ratio_promoter = 0.0f;
+#ifdef ENABLE_LOG
             zlog_notice(pThis->zc,"getMethyRatio() return -1 when processing promoter of gene %s.", pGene->ID);
+#endif //!ENABLE_LOG
         }
         else pGene->methy_ratio_promoter=dtemp;
     }
@@ -205,7 +209,7 @@ void BED::methyMining(ProfileNode *& pGene)
         {
             if(pEx== nullptr) break;
 #ifdef CG_NUMBER
-            size_t CG_tmp = 0;
+            unsigned long  CG_tmp = 0;
 #endif //!CG_NUMBER
             dtemp = getMethyRatio(m_beg, m_end, pEx->Start, pEx->End, nullptr, false, false, pEx->chain
 #ifdef CG_NUMBER
@@ -215,8 +219,10 @@ void BED::methyMining(ProfileNode *& pGene)
             if(dtemp == -1)
             {
                 pEx->methy_ratio=0.0f;
+#ifdef ENABLE_LOG
                 zlog_notice(pThis->zc,"getMethyRatio() return -1 when processing %s form %ld to %ld of gene %s.",
                             pEx->str_type, pEx->Start, pEx->End, pGene->ID);
+#endif //!ENABLE_LOG
             }
             else pEx->methy_ratio=dtemp;
             pEx=pEx->next;
@@ -293,7 +299,7 @@ void BED::pthFuncRaw()
     size_t begOffset = pThis->base_offset + i*BLOCK_SIZE;
 
 #ifdef _FLAG_TEST
-    if(pThis->sb.st_size - begOffset >= BLOCK_SIZE)
+    if(pThis->size_file - begOffset >= BLOCK_SIZE)
     {
         memset(pThis->mapped + begOffset, TEST_CHAR, BLOCK_SIZE);
         pThis->sum=begOffset+BLOCK_SIZE;
@@ -303,8 +309,8 @@ void BED::pthFuncRaw()
     }
     else
     {
-        memset(pThis->mapped + begOffset, TEST_CHAR,pThis->sb.st_size - begOffset);
-        pThis->sum=pThis->sb.st_size;
+        memset(pThis->mapped + begOffset, TEST_CHAR,pThis->size_file - begOffset);
+        pThis->sum=pThis->size_file;
     #ifdef SHOW_ALL_INFO
         printf("Base: 0x%016lx (Last block)\n",begOffset);
     #endif //!SHOW_ALL_INFO
@@ -313,7 +319,7 @@ void BED::pthFuncRaw()
 
 #ifdef INDICATOR_PROGRESS_BAR
     char buff[0x30];
-    sprintf(buff,"Processed %ld / %ld",pThis->sum,pThis->sb.st_size);
+    sprintf(buff,"Processed %ld / %ld",pThis->sum,pThis->size_file);
     MUTEX_LOCK(
         pThis->progress+=pThis->progUnit;
         pThis->bar.set_option(indicators::option::PostfixText{buff});
@@ -413,8 +419,8 @@ void BED::pthFuncProfileList()
     )
     size_t begOffset = pThis->base_offset + i*BLOCK_SIZE_INDEX;
     size_t length = BLOCK_SIZE_INDEX;
-    if(pThis->sbIndex.st_size - begOffset < BLOCK_SIZE_INDEX)
-        length=pThis->sbIndex.st_size - begOffset;
+    if(pThis->size_fileIndex - begOffset < BLOCK_SIZE_INDEX)
+        length=pThis->size_fileIndex - begOffset;
 
     char* p=pThis->mappedIndex+begOffset;
     char* pend=p+length;
@@ -596,6 +602,7 @@ void BED::init()
         i.length=0;
     }
     if(!errorExit) errorExit=m_errorExit;
+#ifdef ENABLE_LOG
     string zlogConf = XMACRO_STR(CMAKE_SOURCE_DIR);
     zlogConf+="/etc/zlog_methyprofile.conf";
     if(zlog_init(zlogConf.c_str()))
@@ -604,6 +611,7 @@ void BED::init()
         errorExit(ZLOG_ERROR);
     }
     zc = zlog_get_category("MethyProfile");
+#endif //!ENABLE_LOG
 }
 
 BED::BED()
@@ -627,38 +635,129 @@ BED::BED(p_errorExit m_errorEx)
     init();
 }
 
-
-void BED::bedfileOpen(const char * bedfile)
+char *BED::open_map(const char *filename, size_t &length,
+#ifdef _UNIX_PLATFORM_
+        int& m_handle
+#elif defined(_WIN32_PLATFORM_)
+        HANDLE& m_handle, HANDLE& m_handleMap
+#endif //!_UNIX_PLATFORM_
+)
 {
+    char* p_m= nullptr;
+#ifdef _UNIX_PLATFORM_
+    struct stat sb{};
+
     // Open file
-    if((fileHandle = open(bedfile, O_RDWR)) < 0)
+    if((m_handle = open(bedfile, O_RDWR)) < 0)
     {
         perror("open(): ") ;
         errorExit(FILE_OPEN_ERROR+1);
     }
 
     // Get file stat
-    if((fstat(fileHandle, &sb)) == -1 )
+    if((fstat(m_handle, &sb)) == -1 )
     {
         perror("fstat(): ") ;
         errorExit(FILE_OPEN_ERROR+2);
     }
 
-    strcpy(this->bedname, bedfile);
+    length=size_file;
 
     // Map file in memory
-    mapped = (char*)mmap(nullptr, sb.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fileHandle, 0);
-    if(mapped == (char*)-1)
+    p_m = (char*)mmap(nullptr, size_file, PROT_READ | PROT_WRITE, MAP_SHARED, m_handle, 0);
+    if(p_m == (char*)-1)
     {
         perror("mmap(): ") ;
         errorExit(FILE_OPEN_ERROR+3);
+    }
+#elif defined(_WIN32_PLATFORM_)
+    m_handle = CreateFile(
+            filename, GENERIC_READ, FILE_SHARE_READ,
+            NULL,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            0
+    );
+    if ( m_handle == INVALID_HANDLE_VALUE)
+    {
+        printf("Open file error. \n");
+        CloseHandle(m_handle);
+        errorExit(FILE_OPEN_ERROR+1);
+    }
+
+    DWORD len_h = 0;
+    length=GetFileSize(m_handle, &len_h);
+    length=length + (((size_t)len_h)<<32);
+
+    m_handleMap = CreateFileMapping(m_handle, NULL, PAGE_READONLY,
+                                     (DWORD) ((uint64_t) length >> 32),
+                                     (DWORD) (length & 0xffffffff),
+                                     NULL);
+    if(m_handleMap == nullptr)
+    {
+        printf("File mapping error. \n");
+        errorExit(FILE_OPEN_ERROR+3);
+    }
+    p_m=(char*)MapViewOfFile(m_handleMap, FILE_MAP_READ,
+                             (DWORD) ((uint64_t) 0 >> 32),
+                             (DWORD) (0 & 0xffffffff),
+                             length);
+    if(p_m == nullptr)
+    {
+        printf("MapViewOfFile() failed. \n");
+        errorExit(FILE_OPEN_ERROR+4);
+    }
+#endif //!_UNIX_PLATFORM_
+    return p_m;
+}
+
+void BED::bedfileOpen(const char * bedfile)
+{
+    strcpy(this->bedname, bedfile);
+#ifdef _UNIX_PLATFORM_
+    mapped = open_map(bedfile, size_file, fileHandle);
+#elif defined(_WIN32_PLATFORM_)
+    mapped = open_map(bedfile, size_file, fileHandle, bedMapHandle);
+#endif //!_UNIX_PLATFORM_
+
+}
+
+void BED::unmap_close(size_t& length, char* p_m,
+#ifdef _UNIX_PLATFORM_
+        int& m_handle
+#elif defined(_WIN32_PLATFORM_)
+        HANDLE& m_handle, HANDLE& m_handleMap
+#endif //!_UNIX_PLATFORM_
+)
+{
+#ifdef _UNIX_PLATFORM_
+    if(munmap(p_m,length))
+    {
+        printf("Unmap failed.");
+        errorExit(FILE_OPEN_ERROR+9);
+    }
+    close(m_handle);
+#elif defined(_WIN32_PLATFORM_)
+    if (UnmapViewOfFile((void*)p_m) == 0)
+    {
+        printf("Unmap failed.");
+        errorExit(FILE_OPEN_ERROR+9);
+    }
+#endif //!_UNIX_PLATFORM_
+    if (CloseHandle(m_handleMap) == 0)
+    {
+        printf("Unmap failed.");
+        errorExit(FILE_OPEN_ERROR+10);
+    }
+    if(m_handle!= INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(m_handle);
     }
 }
 
 void BED::bedfileClose()
 {
-    munmap(mapped,sb.st_size);
-    close(fileHandle);
+    unmap_close(size_file, mapped, fileHandle, bedMapHandle);
 }
 
 BED::~BED()
@@ -666,7 +765,9 @@ BED::~BED()
     if(do_single_analyse)
         delete(set<string>*)sglist;
     bedfileClose();
+#ifdef ENABLE_LOG
     zlog_fini();
+#endif //!ENABLE_LOG
 }
 
 void BED::process(const char *outputfile, Method m)
@@ -706,6 +807,9 @@ void BED::process(const char *gff3file, const char *outputfile, Method m)
                 _outputfile=outputfile;
             processProfile(gff3file);
             saveProfile(_outputfile.c_str());
+#ifdef ALLOW_PLUG_IN_SAVE
+            LoadSavePlugInAndJmp(_outputfile.c_str());
+#endif //!ALLOW_PLUG_IN_SAVE
             _outputfile=string(bedname)+string(".gene.txt");
             saveExternProfile(_outputfile.c_str());
 #ifdef SHOW_PROGRESSBAR
@@ -732,16 +836,16 @@ void BED::processRaw()
 
     printf("\033[33m[Warning]\033[0m: Start reading ...\n");
 
-    readNum=sb.st_size / BLOCK_READ;
-    restSize=sb.st_size % BLOCK_READ;
+    readNum=size_file / BLOCK_READ;
+    restSize=size_file % BLOCK_READ;
 #ifdef SHOW_PROGRESSBAR
-    progUnit=(double)(100.0 / (sb.st_size / BLOCK_SIZE +1));
-    sprintf(buff,"Processed 0 / %ld",sb.st_size);
+    progUnit=(double)(100.0 / (size_file / BLOCK_SIZE +1));
+    sprintf(buff,"Processed 0 / %ld",size_file);
     initProgress(0.0f, buff);
 #endif //!SHOW_PROGRESSBAR
     base_offset=0;
 
-    for(int j=0; j<=readNum; j++, base_offset+=BLOCK_READ)
+    for(size_t j=0; j<=readNum; j++, base_offset+=BLOCK_READ)
     {
         threadNum = 0;
         if(j==readNum)
@@ -750,11 +854,11 @@ void BED::processRaw()
             blockNum=MAXTHREAD;
 
         // Create thread
-        for (int i = 0; i < blockNum; i++)
+        for (size_t i = 0; i < blockNum; i++)
             pth[i]=new thread(this->pthFuncRaw);
 
         // Join thread
-        for (int i = 0; i < blockNum; i++)
+        for (size_t i = 0; i < blockNum; i++)
         {
             pth[i]->join();
             delete pth[i];
@@ -776,15 +880,15 @@ void BED::processTag()
     sprintf(buff,"Building block list");
     initProgress(0.0f, buff);
 #endif //!SHOW_PROGRESSBAR
-    readNum=sb.st_size / BLOCK_READ;
-    restSize=sb.st_size % BLOCK_READ;
-    blockList.resize(sb.st_size / BLOCK_SIZE +1);
+    readNum=size_file / BLOCK_READ;
+    restSize=size_file % BLOCK_READ;
+    blockList.resize(size_file / BLOCK_SIZE +1);
 
     base_offset=0;
     nodeNum = 0;
     progUnit=(double)(25.0 / blockList.size());
 
-    for(int j=0; j<=readNum; j++, base_offset+=BLOCK_READ)
+    for(size_t j=0; j<=readNum; j++, base_offset+=BLOCK_READ)
     {
         threadNum = 0;
         if(j==readNum)
@@ -793,11 +897,11 @@ void BED::processTag()
             blockNum=MAXTHREAD;
 
         // Create thread
-        for (int i = 0; i < blockNum; i++)
+        for (size_t i = 0; i < blockNum; i++)
             pth[i]=new thread(pthFuncBlockList);
 
         // Join thread
-        for (int i = 0; i < blockNum; i++)
+        for (size_t i = 0; i < blockNum; i++)
         {
             pth[i]->join();
             delete pth[i];
@@ -818,7 +922,7 @@ void BED::processTag()
     for(size_t j=0;j<blockList.size() - 1;j++)
         blockList[j].length=blockList[j+1].base-blockList[j].base;
 
-    p=mapped + sb.st_size - 1;
+    p=mapped + size_file - 1;
     if(*(p)=='\n')
         for(int j=0; j<SEARCH_RANGE;j++, p--)
             if(*(p)!='\n') break;
@@ -833,7 +937,7 @@ void BED::processTag()
     base_offset=0;
     progUnit=(double)((100.0 - progress) / blockList.size());
 
-    for(int j=0; j<=readNum; j++, base_offset+=BLOCK_READ)
+    for(size_t j=0; j<=readNum; j++, base_offset+=BLOCK_READ)
     {
         if(j==readNum)
             blockNum=(restSize / BLOCK_SIZE) +1;
@@ -841,11 +945,11 @@ void BED::processTag()
             blockNum=MAXTHREAD;
 
         // Create thread
-        for (int i = 0; i < blockNum; i++)
+        for (size_t i = 0; i < blockNum; i++)
             pth[i]=new thread(pthFuncTag);
 
         // Join thread
-        for (int i = 0; i < blockNum; i++)
+        for (size_t i = 0; i < blockNum; i++)
         {
             pth[i]->join();
             delete pth[i];
@@ -859,13 +963,13 @@ void BED::processTag()
     sort(pTmpList.begin(),pTmpList.end(),cmpChrList);
     for(int i=0;i<pTmpList.size()-1;i++)
         pTmpList[i]->length=pTmpList[i+1]->base-pTmpList[i]->base;
-    pTmpList[pTmpList.size()-1]->length=sb.st_size-pTmpList[pTmpList.size()-1]->base;
+    pTmpList[pTmpList.size()-1]->length=size_file-pTmpList[pTmpList.size()-1]->base;
     pTmpList.clear();
 }
 
 void BED::savechrList()
 {
-    char buff[NAME_MAX];
+    char buff[BED_MAX_PATH];
     strcpy(buff,bedname);
     strcat(buff,".tag");
     ofstream out(buff,ios::out);
@@ -902,24 +1006,8 @@ void BED::savechrList()
 
 void BED::processProfile(const char *&gff3file)
 {
-    if((indexHandle = open(gff3file, O_RDWR)) < 0)
-    {
-        perror("gff3 open(): ") ;
-        errorExit(FILE_OPEN_ERROR + 0xA);
-    }
+    mappedIndex = open_map(gff3file, size_fileIndex, indexHandle, gff3MapHandle);
 
-    if((fstat(indexHandle, &sbIndex)) == -1 )
-    {
-        perror("gff3 fstat(): ") ;
-        errorExit(FILE_OPEN_ERROR + 0xB);
-    }
-
-    mappedIndex = (char*)mmap(nullptr, sbIndex.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, indexHandle, 0);
-    if(mappedIndex == (char*)-1)
-    {
-        perror("gff3 mmap(): ") ;
-        errorExit(FILE_OPEN_ERROR + 0xC);
-    }
     // Build up profile list
 
     size_t readNum=0;
@@ -934,15 +1022,15 @@ void BED::processProfile(const char *&gff3file)
     sprintf(buff,"Indexing");
     initProgress(0.0f, buff);
     progress=0;
-    progUnit=(double)(25.0 / (sbIndex.st_size / BLOCK_SIZE_INDEX +1));
+    progUnit=(double)(25.0 / (size_fileIndex / BLOCK_SIZE_INDEX +1));
 #endif //!SHOW_PROGRESSBAR
 
-    readNum=sbIndex.st_size / BLOCK_READ_INDEX;
-    restSize=sbIndex.st_size % BLOCK_READ_INDEX;
+    readNum=size_fileIndex / BLOCK_READ_INDEX;
+    restSize=size_fileIndex % BLOCK_READ_INDEX;
 
     base_offset=0;
 
-    for(int j=0; j<=readNum; j++, base_offset+=BLOCK_READ_INDEX)
+    for(size_t j=0; j<=readNum; j++, base_offset+=BLOCK_READ_INDEX)
     {
         threadNum = 0;
         if(j==readNum)
@@ -951,11 +1039,11 @@ void BED::processProfile(const char *&gff3file)
             blockNum=MAXTHREAD;
 
         // Create thread
-        for (int i = 0; i < blockNum; i++)
+        for (size_t i = 0; i < blockNum; i++)
             pth[i]=new thread(pthFuncProfileList);
 
         // Join thread
-        for (int i = 0; i < blockNum; i++)
+        for (size_t i = 0; i < blockNum; i++)
         {
             pth[i]->join();
             delete pth[i];
@@ -974,7 +1062,7 @@ void BED::processProfile(const char *&gff3file)
     progUnit=(double)((100.0 - progress) / geneNum);
 #endif //!SHOW_PROGRESSBAR
 
-    for(int j=0; j<=readNum; j++, base_offset+=PROC_GENE_READ)
+    for(size_t j=0; j<=readNum; j++, base_offset+=PROC_GENE_READ)
     {
         threadNum = 0;
         if(j==readNum)
@@ -983,19 +1071,18 @@ void BED::processProfile(const char *&gff3file)
             blockNum=MAXTHREAD;
 
         // Create thread
-        for (int i = 0; i < blockNum; i++)
+        for (size_t i = 0; i < blockNum; i++)
             pth[i]=new thread(pthFuncProfile);
 
         // Join thread
-        for (int i = 0; i < blockNum; i++)
+        for (size_t i = 0; i < blockNum; i++)
         {
             pth[i]->join();
             delete pth[i];
         }
     }
 
-    munmap(mappedIndex,sbIndex.st_size);
-    close(indexHandle);
+    unmap_close(size_fileIndex, mappedIndex, indexHandle, gff3MapHandle);
 }
 
 void BED::saveProfile(const char *nameProfile)
@@ -1068,9 +1155,6 @@ void BED::saveProfile(const char *nameProfile)
 */
         fprintf(fout, "\n");
     }
-#ifdef ALLOW_PLUG_IN_SAVE
-    LoadSavePlugInAndJmp(nameProfile);
-#endif //!ALLOW_PLUG_IN_SAVE
     fclose(fout);
 }
 
@@ -1143,7 +1227,7 @@ void BED::saveSingleData(char *m_beg, char *m_end, char *ID)
 void BED::saveSingleData(char *m_beg, char *m_end, char *ID, const char* suffix)
 {
     if(!ID) return;
-    char name_buff[NAME_MAX]={0};
+    char name_buff[BED_MAX_PATH]={0};
     sprintf(name_buff, "./single/%s%s", ID, suffix);
 
     FILE* sgf= fopen(name_buff, "wb");
@@ -1246,8 +1330,14 @@ bool BED::isdigit(int x)
         return false;
 }
 
+#ifdef ALLOW_PLUG_IN_SAVE
+
 void BED::LoadSavePlugInAndJmp(const char* foutput)
 {
+
+    typedef void (*SaveAs)(const char*, ProfileNode**, int);
+
+#ifdef _UNIX_PLATFORM_
     string plug_in_name = XMACRO_STR(CMAKE_SOURCE_DIR);
     plug_in_name+="/plug-in/libsave.so";
     void *handle = dlopen(plug_in_name.c_str(), RTLD_LAZY);
@@ -1257,7 +1347,6 @@ void BED::LoadSavePlugInAndJmp(const char* foutput)
         printf("\n\033[31m[Error]\033[0m: %s", dlerror());
         pThis->errorExit(FILE_OPEN_ERROR+0x20);
     }
-    typedef void (*SaveAs)(const char*, ProfileNode**, int);
     SaveAs saveas=(SaveAs)dlsym(handle,"ProfileSave");
     if(!saveas)
     {
@@ -1267,47 +1356,71 @@ void BED::LoadSavePlugInAndJmp(const char* foutput)
     }
     (*saveas)(foutput, pThis->profileList, pThis->geneNum);
     dlclose(handle);
+#elif defined(_WIN32_PLATFORM_)
+    string plug_in_name="..\\plug-in\\libsave.dll";
+    HINSTANCE handle = LoadLibrary(plug_in_name.c_str());
+    DWORD x=GetLastError();
+    if (handle == NULL)
+    {
+        printf("\n\033[31m[Error]\033[0m: LoadLibrary() failed. \n");
+        pThis->errorExit(FILE_OPEN_ERROR+0x20);
+    }
+    SaveAs saveas=(SaveAs)GetProcAddress(handle, "ProfileSave");
+    if(!saveas)
+    {
+        printf("GetProcAddress() failed.\n");
+        pThis->errorExit(MUTEX_ERROR+0x10);
+    }
+    (*saveas)(foutput, pThis->profileList, pThis->geneNum);
+    FreeLibrary(handle);
+#endif //!_UNIX_PLATFORM_
 }
 
-void BED::loadSingleList(const char *listfile) {
+#endif //!ALLOW_PLUG_IN_SAVE
+
+void BED::loadSingleList(const char *listfile)
+{
     ifstream list_in(listfile, ios::in);
 
     auto *pset = new set<string>;
     string str_buff;
 
-    if (!list_in.is_open()) {
+    if (!list_in.is_open())
+    {
         perror("ifstream: ");
         errorExit(FILE_OPEN_ERROR + 0x11);
     }
 
-    while (getline(list_in, str_buff)) {
+    while (getline(list_in, str_buff))
+    {
         if (str_buff.empty()) continue;
         pset->insert(str_buff);
     }
 
-    if (!pset->empty()) {
+    if (!pset->empty())
+    {
         do_single_analyse = true;
         sglist = pset;
         /* To do. */
-        int acc =
-#ifdef _WIN32_PLATFORM_
-                _access("single", 0);
-#elif defined(_UNIX_PLATFORM_)
-                access("single", 0);
-        if (acc == -1) {
-#endif // !_WIN32_PLATFORM_
-            int mk =
-#ifdef _WIN32_PLATFORM_
-                    _mkdir("single");
-#elif defined(_UNIX_PLATFORM_)
-                    mkdir("single", 0755);
-#endif // !_WIN32_PLATFORM_
-            if (mk == -1) {
+#ifdef _UNIX_PLATFORM_
+        if (access("single", 0) == -1)
+        {
+            if (mkdir("single", 0755) == -1)
+            {
                 printf("\033[31m[Error]\033[0m: Cannot create folder for single genes.\n");
                 errorExit(DIRECTORY_CREATE_ERROR);
             }
         }
+#elif defined(_WIN32_PLATFORM_)
+        if(!( GetFileAttributes("single") & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            if(!CreateDirectory("single", NULL))
+            {
+                printf("\033[31m[Error]\033[0m: Cannot create folder for single genes.\n");
+                errorExit(DIRECTORY_CREATE_ERROR);
+            }
+        }
+#endif //!_UNIX_PLATFORM_
     }
-
     list_in.close();
 }

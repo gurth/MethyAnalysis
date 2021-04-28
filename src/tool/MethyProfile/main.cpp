@@ -27,7 +27,7 @@ void usage()
 
 int main(int argc,char **argv)
 {
-    if(argc<1)
+    if(argc<=1)
     {
         printf("\033[31m[Error]\033[0m:No input file.\n");
         usage();

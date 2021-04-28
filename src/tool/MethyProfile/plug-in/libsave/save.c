@@ -10,9 +10,9 @@
 extern "C"
 {
 
-    void ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
+    void __stdcall ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
     {
-        char name_buff[NAME_MAX];
+        char name_buff[PATH_MAX];
         sprintf(name_buff, "%s.pro.txt", nameProfile);
         FILE* fout=fopen(name_buff,"w");
         if(fout== nullptr)

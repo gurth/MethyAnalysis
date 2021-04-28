@@ -24,6 +24,29 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #    endif()
 #endif()
 
+IF (WIN32)
+    # Your QT path
+    set(CMAKE_PREFIX_PATH "C:\\Qt\\Qt\\5.15.2\\mingw81_64")
+
+    set(Qt5_DIR "${CMAKE_PREFIX_PATH}/lib/cmake/Qt5")
+    set(Qt5Widgets_DIR "${CMAKE_PREFIX_PATH}/lib/cmake/Qt5Widgets")
+
+    ADD_DEFINITIONS(-D _WIN32_PLATFORM_)
+
+ELSEIF (APPLE OR UNIX)
+IF (CMAKE_SYSTEM_NAME MATCHES "CYGWIN")
+        set(CMAKE_PREFIX_PATH "/cygdrive/c/Qt/Qt/5.15.2/mingw81_64")
+        set(Qt${QT_VERSION_MAJOR}_DIR "${CMAKE_PREFIX_PATH}/lib/cmake/Qt5")
+        set(Qt${QT_VERSION_MAJOR}Widgets_DIR "${CMAKE_PREFIX_PATH}/lib/cmake/Qt5Widgets")
+
+        ADD_DEFINITIONS(-D _WIN32_PLATFORM_)
+    ELSE()
+        ADD_DEFINITIONS(-D _UNIX_PLATFORM_)
+    ENDIF()
+
+    find_package(Threads)
+ENDIF ()
+
 find_package(Qt5 COMPONENTS Widgets REQUIRED)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
@@ -50,8 +73,10 @@ if(ANDROID)
     mainwindow.ui
     ../tool/MethyProfile/bed.h
     ../tool/MethyProfile/bed.cpp
+    interface.h
     interface.cpp
     my_config.h
+    my_error.hpp
     ${QRC_FILES}
   )
 else()
@@ -62,21 +87,18 @@ else()
     mainwindow.ui
     ../tool/MethyProfile/bed.h
     ../tool/MethyProfile/bed.cpp
+    interface.h
     interface.cpp
     my_config.h
+    my_error.hpp
     ${QRC_FILES}
   )
 endif()
 
 SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin)
 
-IF (WIN32)
-  MESSAGE(STATUS "Now is windows")
-  ADD_DEFINITIONS(-D _WIN32_PLATFORM_)
+IF (WIN32 OR (CMAKE_SYSTEM_NAME MATCHES "CYGWIN"))
   target_link_libraries(MethyProfile-GUI PRIVATE Qt5::Widgets)
-ELSEIF (APPLE OR UNIX)
-  MESSAGE(STATUS "Now is UNIX-like OS's. Including APPLE OSX and CygWin")
-  ADD_DEFINITIONS(-D _UNIX_PLATFORM_)
-  find_package(Threads)
+ELSE()
   target_link_libraries(MethyProfile-GUI PRIVATE Qt5::Widgets ${CMAKE_THREAD_LIBS_INIT} dl libzlog.so)
 ENDIF ()

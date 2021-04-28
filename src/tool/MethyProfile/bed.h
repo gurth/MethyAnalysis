@@ -14,7 +14,16 @@
 #include <mutex>
 #include <vector>
 
-#include <zlog.h>
+#ifdef _UNIX_PLATFORM_
+
+#define BED_MAX_PATH NAME_MAX
+
+#elif defined(_WIN32_PLATFORM_)
+
+# include <Windows.h>
+#define BED_MAX_PATH MAX_PATH
+
+#endif //!_UNIX_PLATFORM_
 
 #define MACRO_STR(x) #x
 #define XMACRO_STR(s) MACRO_STR(s)
@@ -28,6 +37,12 @@
 #include <indicators/block_progress_bar.hpp>
 
 #endif //! INDICATOR_PROGRESS_BAR
+
+#ifdef ENABLE_LOG
+
+#include <zlog.h>
+
+#endif//!ENABLE_LOG
 
 namespace bed
 {
@@ -56,13 +71,22 @@ namespace bed
     class BED
     {
     private:
-        char bedname[NAME_MAX];         /* Bed file name. */
+        char bedname[BED_MAX_PATH];         /* Bed file name. */
         char *mapped= nullptr;          /* Bed file mapped location. */
         char *mappedIndex = nullptr;    /* GFF3 file mapped location. */
         unsigned long base_offset=0;    /* Base offset of every loop. */
         unsigned long sum =0;           /* Sum of bytes which have processed. */
-        struct stat sb{};               /* Attributes of bed file. */
-        struct stat sbIndex{};          /* Attributes of gff3 file. */
+        size_t size_file = 0;           /* Size of bed file. */
+        size_t size_fileIndex = 0;      /* Size of gff3 file. */
+#ifdef _UNIX_PLATFORM_
+        int fileHandle = -1;            /* File handle of bed file. */
+        int indexHandle = -1;           /* File handle of gff3 file. */
+#elif defined(_WIN32_PLATFORM_)
+        HANDLE fileHandle = INVALID_HANDLE_VALUE;       /* File handle of bed file. */
+        HANDLE indexHandle = INVALID_HANDLE_VALUE;      /* File handle of gff3 file. */
+        HANDLE bedMapHandle = INVALID_HANDLE_VALUE;     /* BED mapped handle. */
+        HANDLE gff3MapHandle = INVALID_HANDLE_VALUE;    /* GFF3 mapped handle. */
+#endif //!_UNIX_PLATFORM_
         int threadNum = 0;              /* Thread number per loop. */
         int nodeNum = 0;                /* First node number which is pending process. */
         int geneNum = 0;                /* Sum of gene number. */
@@ -83,9 +107,9 @@ namespace bed
             indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}
         };
 #endif // !INDICATOR_PROGRESS_BAR
-        int fileHandle = -1;            /* File handle of bed file. */
-        int indexHandle = -1;           /* File handle of gff3 file. */
+#ifdef ENABLE_LOG
         zlog_category_t *zc = nullptr;  /* zlog category, for log file output*/
+#endif //!ENABLE_LOG
         std::vector<BlockListNode>blockList;    /* Block list of bed file. */
         BlockListNode chrList[MAX_CHR];         /* Chromosome list in the form of blockList. */
         ProfileNode* profileList[MAX_GENE]={nullptr};
@@ -96,7 +120,25 @@ namespace bed
             /* General initialization operation. */
 
         void processInit();
-            /* Inittation when process start.*/    
+            /* Inittation when process start.*/
+
+        char* open_map(const char* filename, size_t& length,
+#ifdef _UNIX_PLATFORM_
+        int& m_handle
+#elif defined(_WIN32_PLATFORM_)
+        HANDLE& m_handle, HANDLE& m_handleMap
+#endif //!_UNIX_PLATFORM_
+        );
+            /* Open and map file in memory.  */
+
+        void unmap_close(size_t& length, char* p_m,
+#ifdef _UNIX_PLATFORM_
+        int& m_handle
+#elif defined(_WIN32_PLATFORM_)
+        HANDLE& m_handle, HANDLE& m_handleMap
+#endif //!_UNIX_PLATFORM_
+                         );
+            /* Unmap and close file*/
 
         inline void processRaw();
             /* Process bed file with Method::raw, which means byte manipulation directly.

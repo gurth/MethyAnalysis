@@ -8,12 +8,11 @@ include_directories("${CMAKE_SOURCE_DIR}/include")
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
 
-IF (WIN32)
-    MESSAGE(STATUS "Now is windows")
+IF (WIN32 OR (CMAKE_SYSTEM_NAME MATCHES "CYGWIN"))
     ADD_DEFINITIONS(-D _WIN32_PLATFORM_)
-ELSEIF (APPLE OR UNIX)
-    MESSAGE(STATUS "Now is UNIX-like OS's. Including APPLE OSX and CygWin")
+else()
     ADD_DEFINITIONS(-D _UNIX_PLATFORM_)
+    ADD_DEFINITIONS(-D ENABLE_LOG)
     find_package(Threads)
 ENDIF ()
 
@@ -28,4 +27,8 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/plug-in/libsave")
 
 add_executable(methyprofile main.cpp bed.cpp bed.h profile_node.h my_config.h)
 
-target_link_libraries(methyprofile dl ${CMAKE_THREAD_LIBS_INIT} libzlog.so)
+IF (WIN32 OR (CMAKE_SYSTEM_NAME MATCHES "CYGWIN"))
+    target_link_libraries(methyprofile dl ${CMAKE_THREAD_LIBS_INIT})
+ELSE()
+    target_link_libraries(methyprofile dl ${CMAKE_THREAD_LIBS_INIT} libzlog.so)
+ENDIF()

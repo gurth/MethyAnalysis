@@ -5,6 +5,8 @@
 #include <QProgressBar>
 #include <QLabel>
 
+#include "interface.h"
+
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -32,13 +34,20 @@ private slots:
 
 private:
     void init();
-    void MethyProfileInterface(const char* bedname, const char* gff3name, const char* outputname, bool have_promoter
+    /*
+    static void MethyProfileInterface(const char* bedname, const char* gff3name, const char* outputname, bool have_promoter
                                , size_t length_promoter, bool do_single_analysis, const char* sglist);
-    static void m_setProgress(double progress);
-    static void m_initProgress(double progress, const char* info);
-    static void m_errorExit(int m_error);
 
-    static int infoResult(const char* info);
+    static int infoResult(const char* info);*/
+
+private slots:
+    void rev_setProgress(int progress);
+
+    void rev_setMsg(const char* info);
+
+    void rev_msgBox(const char* info);
+
+    void rev_error(int m_error);
 
 private:
     Ui::MainWindow *ui;
@@ -46,7 +55,8 @@ private:
     QProgressBar *m_progressbar = nullptr;
     QLabel *m_labelstatus = nullptr;
 
-    static MainWindow* pThis;
+    m_Interface mInf;
+
 };
 
 #endif // MAINWINDOW_H

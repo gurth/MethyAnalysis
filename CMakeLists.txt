@@ -3,7 +3,10 @@ project(methyanalysis)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
 
-include(libzlog)
+IF (WIN32 OR (CMAKE_SYSTEM_NAME MATCHES "CYGWIN"))
+ELSE()
+    include(libzlog)
+ENDIF()
 
 add_subdirectory("${PROJECT_SOURCE_DIR}/src/tool/MethyProfile")
 
