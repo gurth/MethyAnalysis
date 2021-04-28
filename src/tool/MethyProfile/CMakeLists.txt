@@ -28,7 +28,7 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/plug-in/libsave")
 add_executable(methyprofile main.cpp bed.cpp bed.h profile_node.h my_config.h)
 
 IF (WIN32 OR (CMAKE_SYSTEM_NAME MATCHES "CYGWIN"))
-    target_link_libraries(methyprofile dl ${CMAKE_THREAD_LIBS_INIT})
+    target_link_libraries(methyprofile ${CMAKE_THREAD_LIBS_INIT})
 ELSE()
     target_link_libraries(methyprofile dl ${CMAKE_THREAD_LIBS_INIT} libzlog.so)
 ENDIF()
