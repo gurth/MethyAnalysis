@@ -112,7 +112,7 @@ void BED::dichotomySearchChr(char* m_beg, char* m_end)
         pThis->chrList[chrBeg].base = m_beg - pThis->mapped;
 }
 
-void BED::dichotomySearchOffset(char *m_beg, char *m_end, char*& ppos, unsigned long pos, bool isBeg)
+void BED::dichotomySearchOffset(char *m_beg, char *m_end, char*& ppos, unsigned long long pos, bool isBeg)
 {
     int pos_beg=atoiChr(goFrontItem(m_beg, 2));
     int pos_end=atoiChr(goFrontItem(m_end, 1));
@@ -209,7 +209,7 @@ void BED::methyMining(ProfileNode *& pGene)
         {
             if(pEx== nullptr) break;
 #ifdef CG_NUMBER
-            unsigned long  CG_tmp = 0;
+            unsigned long long CG_tmp = 0;
 #endif //!CG_NUMBER
             dtemp = getMethyRatio(m_beg, m_end, pEx->Start, pEx->End, nullptr, false, false, pEx->chain
 #ifdef CG_NUMBER
@@ -232,7 +232,7 @@ void BED::methyMining(ProfileNode *& pGene)
 
 double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end, char* ID, bool single_tag, bool ispromoter, bool chain
 #ifdef CG_NUMBER
-, unsigned long& cg_numb
+, unsigned long long& cg_numb
 #endif // CG_NUMBER
 )
 {
@@ -1332,6 +1332,72 @@ bool BED::isdigit(int x)
 
 #ifdef ALLOW_PLUG_IN_SAVE
 
+#define _PLUG_IN_TEST
+
+#ifdef _PLUG_IN_TEST
+void __stdcall ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
+{
+    char name_buff[PATH_MAX];
+    sprintf(name_buff, "%s.pro.txt", nameProfile);
+    FILE* fout=fopen(name_buff,"w");
+    if(fout== nullptr)
+    {
+        perror("fopen(): ");
+        exit(FILE_SAVE_ERROR + 0xA);
+    }
+    fprintf(fout,"chr\tID\tStart\tEnd\tStrand\tPromoter_methy_ratio");
+#ifdef CG_NUMBER
+    fprintf(fout, "\tCG");
+#endif //!CG_number
+    fprintf(fout, "\n");
+
+    for(int i=0;i<n;i++)
+    {
+        if (fabs(profileList[i]->methy_ratio) <= 1e-15) continue;
+        char str_chr[0x10];
+        switch (profileList[i]->chr)
+        {
+#ifdef __CHR_CHL
+            case MAX_CHR-4:
+                    strcpy(str_chr, "CH");
+                    break;
+#endif //!__CHR_CHL
+            case MAX_CHR - 3:
+                strcpy(str_chr, "MT");
+                break;
+#ifdef __CHR_ZW
+                case MAX_CHR-2:
+                        strcpy(str_chr, "Z");
+                        break;
+                    case MAX_CHR-1:
+                        strcpy(str_chr, "W");
+                        break;
+#else
+            case MAX_CHR - 2:
+                strcpy(str_chr, "X");
+                break;
+            case MAX_CHR - 1:
+                strcpy(str_chr, "Y");
+                break;
+#endif //!__CHR_ZW
+            default:
+                sprintf(str_chr, "%d",profileList[i]->chr);
+                break;
+        }
+        char buff[0x30];
+        sprintf(buff, "%s_promoter", profileList[i]->ID);
+        fprintf(fout, "%s\t%s\t%ld\t%ld\t%c\t%.15lf", str_chr, buff,
+                profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
+                profileList[i]->methy_ratio_promoter);
+#ifdef CG_NUMBER
+        fprintf(fout, "\t%ld", profileList[i]->NumCG);
+#endif //!CG_number
+        fprintf(fout, "\n");
+    }
+    fclose(fout);
+}
+#endif//!_PLUG_IN_TEST
+
 void BED::LoadSavePlugInAndJmp(const char* foutput)
 {
 
@@ -1357,6 +1423,7 @@ void BED::LoadSavePlugInAndJmp(const char* foutput)
     (*saveas)(foutput, pThis->profileList, pThis->geneNum);
     dlclose(handle);
 #elif defined(_WIN32_PLATFORM_)
+#ifndef _FLAG_TEST
     string plug_in_name="..\\plug-in\\libsave.dll";
     HINSTANCE handle = LoadLibrary(plug_in_name.c_str());
     DWORD x=GetLastError();
@@ -1373,6 +1440,10 @@ void BED::LoadSavePlugInAndJmp(const char* foutput)
     }
     (*saveas)(foutput, pThis->profileList, pThis->geneNum);
     FreeLibrary(handle);
+#else
+    ProfileSave(foutput, pThis->profileList, pThis->geneNum);
+#endif //!_FLAG_TEST
+
 #endif //!_UNIX_PLATFORM_
 }
 

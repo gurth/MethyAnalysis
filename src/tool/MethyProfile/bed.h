@@ -62,8 +62,8 @@ namespace bed
     struct BlockListNode
             /* Block list item structure. Show the block's information. */
     {
-        unsigned long base=0;   /* Base offset of the block. */
-        unsigned long length=0; /* Length of the block. */
+        unsigned long long base=0;   /* Base offset of the block. */
+        unsigned long long length=0; /* Length of the block. */
     };
 
     #include "profile_node.h"
@@ -74,8 +74,8 @@ namespace bed
         char bedname[BED_MAX_PATH];         /* Bed file name. */
         char *mapped= nullptr;          /* Bed file mapped location. */
         char *mappedIndex = nullptr;    /* GFF3 file mapped location. */
-        unsigned long base_offset=0;    /* Base offset of every loop. */
-        unsigned long sum =0;           /* Sum of bytes which have processed. */
+        unsigned long long base_offset=0;    /* Base offset of every loop. */
+        unsigned long long sum =0;           /* Sum of bytes which have processed. */
         size_t size_file = 0;           /* Size of bed file. */
         size_t size_fileIndex = 0;      /* Size of gff3 file. */
 #ifdef _UNIX_PLATFORM_
@@ -162,7 +162,7 @@ namespace bed
              * Please make sure that m_beg and m_end point to the beginning of a line.
              * This function will be executed recursively. */
 
-        static void dichotomySearchOffset(char* m_beg, char* m_end, char*& ppos, unsigned long pos, bool isBeg);
+        static void dichotomySearchOffset(char* m_beg, char* m_end, char*& ppos, unsigned long long pos, bool isBeg);
             /* Search interval of a gene in bed file using dichotomy.
              * This function will be executed recursively.
              * m_beg and m_end are the beginning an ending of a block.
@@ -204,7 +204,7 @@ namespace bed
         static inline double getMethyRatio(char* m_beg, char* m_end, size_t p_start, size_t p_end, char* ID,
                                            bool single_tag, bool ispromoter, bool chain
         #ifdef CG_NUMBER
-                    , unsigned long& cg_numb
+                    , unsigned long long& cg_numb
         #endif // CG_NUMBER
         );
             /* Get methy ratio.

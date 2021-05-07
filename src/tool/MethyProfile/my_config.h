@@ -8,6 +8,10 @@
 //#define INDICATOR_PROGRESS_BAR
 /* Use indicators progress bar. */
 
+#define ALLOW_PLUG_IN_SAVE
+
+#define  _PLUG_IN_TEST
+
 //#define ENABLE_LOG
 /* Enable journal output. */
 
