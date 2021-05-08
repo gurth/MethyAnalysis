@@ -5,7 +5,7 @@
 #ifndef METHYANALYSIS_MY_CONFIG_H
 #define METHYANALYSIS_MY_CONFIG_H
 
-//#define INDICATOR_PROGRESS_BAR
+#define INDICATOR_PROGRESS_BAR
 /* Use indicators progress bar. */
 
 #define ALLOW_PLUG_IN_SAVE

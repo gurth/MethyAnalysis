@@ -28,8 +28,6 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <io.h>
-#include <direct.h>
 
 #endif // _UNIX_PLATFORM_
 
@@ -319,7 +317,7 @@ void BED::pthFuncRaw()
 
 #ifdef INDICATOR_PROGRESS_BAR
     char buff[0x30];
-    sprintf(buff,"Processed %ld / %ld",pThis->sum,pThis->size_file);
+    sprintf(buff,"Processed %lld / %lld",pThis->sum,pThis->size_file);
     MUTEX_LOCK(
         pThis->progress+=pThis->progUnit;
         pThis->bar.set_option(indicators::option::PostfixText{buff});
@@ -648,7 +646,7 @@ char *BED::open_map(const char *filename, size_t &length,
     struct stat sb{};
 
     // Open file
-    if((m_handle = open(bedfile, O_RDWR)) < 0)
+    if((m_handle = open(filename, O_RDWR)) < 0)
     {
         perror("open(): ") ;
         errorExit(FILE_OPEN_ERROR+1);
@@ -661,10 +659,10 @@ char *BED::open_map(const char *filename, size_t &length,
         errorExit(FILE_OPEN_ERROR+2);
     }
 
-    length=size_file;
+    length=sb.st_size;
 
     // Map file in memory
-    p_m = (char*)mmap(nullptr, size_file, PROT_READ | PROT_WRITE, MAP_SHARED, m_handle, 0);
+    p_m = (char*)mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_SHARED, m_handle, 0);
     if(p_m == (char*)-1)
     {
         perror("mmap(): ") ;
@@ -743,7 +741,6 @@ void BED::unmap_close(size_t& length, char* p_m,
         printf("Unmap failed.");
         errorExit(FILE_OPEN_ERROR+9);
     }
-#endif //!_UNIX_PLATFORM_
     if (CloseHandle(m_handleMap) == 0)
     {
         printf("Unmap failed.");
@@ -753,11 +750,16 @@ void BED::unmap_close(size_t& length, char* p_m,
     {
         CloseHandle(m_handle);
     }
+#endif //!_UNIX_PLATFORM_
 }
 
 void BED::bedfileClose()
 {
-    unmap_close(size_file, mapped, fileHandle, bedMapHandle);
+    unmap_close(size_file, mapped, fileHandle
+#ifdef _WIN32_PLATFORM_
+                , bedMapHandle
+#endif //!_WIN32_PLATFORM_
+    );
 }
 
 BED::~BED()
@@ -810,8 +812,11 @@ void BED::process(const char *gff3file, const char *outputfile, Method m)
 #ifdef ALLOW_PLUG_IN_SAVE
             LoadSavePlugInAndJmp(_outputfile.c_str());
 #endif //!ALLOW_PLUG_IN_SAVE
-            _outputfile=string(bedname)+string(".gene.txt");
-            saveExternProfile(_outputfile.c_str());
+            if(do_single_analyse)
+            {
+                _outputfile = string(bedname) + string(".gene.txt");
+                saveExternProfile(_outputfile.c_str());
+            }
 #ifdef SHOW_PROGRESSBAR
             setProgress(100.0f);
 #endif //!SHOW_PROGRESSBAR
@@ -1006,7 +1011,11 @@ void BED::savechrList()
 
 void BED::processProfile(const char *&gff3file)
 {
-    mappedIndex = open_map(gff3file, size_fileIndex, indexHandle, gff3MapHandle);
+    mappedIndex = open_map(gff3file, size_fileIndex, indexHandle
+#ifdef _WIN32_PLATFORM_
+                           , gff3MapHandle
+#endif //!_WIN32_PLATFORM_
+                           );
 
     // Build up profile list
 
@@ -1082,7 +1091,11 @@ void BED::processProfile(const char *&gff3file)
         }
     }
 
-    unmap_close(size_fileIndex, mappedIndex, indexHandle, gff3MapHandle);
+    unmap_close(size_fileIndex, mappedIndex, indexHandle
+#ifdef _WIN32_PLATFORM_
+                , gff3MapHandle
+#endif //!_WIN32_PLATFORM_
+                );
 }
 
 void BED::saveProfile(const char *nameProfile)
@@ -1138,11 +1151,11 @@ void BED::saveProfile(const char *nameProfile)
                 str_chr = to_string(profileList[i]->chr);
                 break;
         }
-        fprintf(fout, "%s\t%s\t%ld\t%ld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID,
+        fprintf(fout, "%s\t%s\t%lld\t%lld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID,
                 profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
                 profileList[i]->methy_ratio);
 #ifdef CG_NUMBER
-        fprintf(fout, "\t%ld", profileList[i]->NumCG);
+        fprintf(fout, "\t%lld", profileList[i]->NumCG);
 #endif //!CG_number
 /*
         if (have_promoter)
@@ -1201,7 +1214,7 @@ void BED::saveExternProfile(const char *nameProfileEx)
                 str_chr = to_string(profileList[i]->chr);
                 break;
         }
-        fprintf(fout, "%s\t%s\t%s\t%ld\t%ld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID, profileList[i]->str_type,
+        fprintf(fout, "%s\t%s\t%s\t%lld\t%lld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID, profileList[i]->str_type,
                 profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
                 profileList[i]->methy_ratio);
         fprintf(fout, "\n");
@@ -1209,7 +1222,7 @@ void BED::saveExternProfile(const char *nameProfileEx)
         while (true)
         {
             if(p== nullptr) break;
-            fprintf(fout, "%s\t%s\t%s\t%ld\t%ld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID, p->str_type,
+            fprintf(fout, "%s\t%s\t%s\t%lld\t%lld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID, p->str_type,
                     p->Start, p->End, (p->chain) ? '+' : '-',
                     p->methy_ratio);
             fprintf(fout, "\n");
@@ -1335,7 +1348,7 @@ bool BED::isdigit(int x)
 #define _PLUG_IN_TEST
 
 #ifdef _PLUG_IN_TEST
-void __stdcall ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
+void ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
 {
     char name_buff[PATH_MAX];
     sprintf(name_buff, "%s.pro.txt", nameProfile);
@@ -1386,11 +1399,11 @@ void __stdcall ProfileSave(const char* nameProfile, ProfileNode** profileList, i
         }
         char buff[0x30];
         sprintf(buff, "%s_promoter", profileList[i]->ID);
-        fprintf(fout, "%s\t%s\t%ld\t%ld\t%c\t%.15lf", str_chr, buff,
+        fprintf(fout, "%s\t%s\t%lld\t%lld\t%c\t%.15lf", str_chr, buff,
                 profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
                 profileList[i]->methy_ratio_promoter);
 #ifdef CG_NUMBER
-        fprintf(fout, "\t%ld", profileList[i]->NumCG);
+        fprintf(fout, "\t%lld", profileList[i]->NumCG);
 #endif //!CG_number
         fprintf(fout, "\n");
     }
