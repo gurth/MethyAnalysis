@@ -11,3 +11,5 @@ ENDIF()
 add_subdirectory("${PROJECT_SOURCE_DIR}/src/tool/MethyProfile")
 
 add_subdirectory("${PROJECT_SOURCE_DIR}/src/MethyProfile-GUI")
+
+add_subdirectory("${PROJECT_SOURCE_DIR}/src/tool/MethyDump")

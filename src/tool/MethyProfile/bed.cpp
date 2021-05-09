@@ -110,6 +110,40 @@ void BED::dichotomySearchChr(char* m_beg, char* m_end)
         pThis->chrList[chrBeg].base = m_beg - pThis->mapped;
 }
 
+void BED::dichotomySearchChain(int m_chr, char *m_beg, char *m_end)
+{
+    char* chain_beg= goFrontItem(m_beg, 3);
+    char* chain_end= goFrontItem(m_end, 3);
+
+    if(*chain_beg!=*chain_end)
+    {
+        char* p=(char*)(size_t)(((size_t)m_beg + (size_t)m_end) >> 1);
+
+        for(int j=0; j<SEARCH_RANGE;j++, p--)
+            if(*(p)=='\n') break;
+        p++;
+
+        if(p>m_beg)  // if p == m_beg, dichotomySearch(p,m_end) will forever unchanged
+        {
+            dichotomySearchChain(m_chr, m_beg, p);
+            dichotomySearchChain(m_chr, p, m_end);
+        }
+        else if(p==m_beg)
+        {
+            for(int j=0; j<SEARCH_RANGE;j++, p++)
+                if(*(p)=='\n') break;
+            p++;
+            if(p < m_end)
+            {
+                dichotomySearchChain(m_chr, m_beg, p);
+                dichotomySearchChain(m_chr, p, m_end);
+            }
+            else if(p == m_end)
+                pThis->chrList[m_chr].edge_base = m_end - pThis->mapped;
+        }
+    }
+}
+
 void BED::dichotomySearchOffset(char *m_beg, char *m_end, char*& ppos, unsigned long long pos, bool isBeg)
 {
     int pos_beg=atoiChr(goFrontItem(m_beg, 2));
@@ -156,21 +190,38 @@ void BED::methyMining(ProfileNode *& pGene)
     if(!(size_t)(pThis->chrList[pGene->chr].base+1)) return;
     // We can think about using a queue to shrink search range
     /* Prepare search range. */
-    char* m_beg=pThis->mapped+pThis->chrList[pGene->chr].base;
-    char* m_end=m_beg+pThis->chrList[pGene->chr].length;
+    char* m_beg= nullptr;
+    char* m_end= nullptr;
     double dtemp=0.0f;
 
-    /* Kill empty line before EOF. */
-    m_end--;
-    while(true){if((*m_end)!='\n') break; m_end--;}
-    for(int j=0; j<SEARCH_RANGE;j++, m_end--)
-        if(*(m_end)=='\n') break;
-    m_end++;
+#ifdef CONSECUTIVE_NEG_FIRST
+    if(pGene->chain)
+    {
+        m_beg=pThis->mapped+pThis->chrList[pGene->chr].edge_base;
+        m_end=pThis->mapped+pThis->chrList[pGene->chr].base+pThis->chrList[pGene->chr].length;
+    }
+    else
+    {
+        m_beg=pThis->mapped+pThis->chrList[pGene->chr].base;
+        m_end=pThis->mapped+pThis->chrList[pGene->chr].edge_base;
+        if(m_end<=m_beg) return;
+        m_end--;
+        while(true){if((*m_end)!='\n') break; m_end--;}
+        for(int j=0; j<SEARCH_RANGE;j++, m_end--)
+            if(*(m_end)=='\n') break;
+        m_end++;
+        if(m_end<m_beg) return;
+    }
+#endif //!CONSECUTIVE_NEG_FIRST
 
     dtemp = getMethyRatio(m_beg, m_end, pGene->Start, pGene->End, pGene->ID, pGene->single_tag, false, pGene->chain
 #ifdef CG_NUMBER
             ,pGene->NumCG
 #endif //!CG_NUMBER
+#ifdef _DEBUG_PROFILE_NODE
+            ,pGene->depth
+            ,pGene->mCdep
+#endif // !_DEBUG_PROFILE_NODE
     );
     if(dtemp == -1)
     {
@@ -183,12 +234,18 @@ void BED::methyMining(ProfileNode *& pGene)
 
     if(pThis->have_promoter)
     {
+        pGene->Start_promoter=(pGene->Start < pThis->promoterLen) ? 0 : pGene -> Start - pThis -> promoterLen;
+        pGene->End_promoter=pGene->Start;
         dtemp = getMethyRatio(m_beg, m_end
-                              , (pGene->Start < pThis->promoterLen) ? 0 : pGene -> Start - pThis -> promoterLen
-                              , pGene->Start, pGene->ID, pGene->single_tag, true, pGene->chain
+                              , pGene->Start_promoter
+                              , pGene->End_promoter, pGene->ID, pGene->single_tag, true, pGene->chain
                     #ifdef CG_NUMBER
                             ,pGene->NumCG_promoter
                     #endif //!CG_NUMBER
+                    #ifdef _DEBUG_PROFILE_NODE
+                            ,pGene->depth_promoter
+                            ,pGene->mCdep_promoter
+                    #endif // !_DEBUG_PROFILE_NODE
                               );
         if(dtemp == -1)
         {
@@ -213,6 +270,10 @@ void BED::methyMining(ProfileNode *& pGene)
 #ifdef CG_NUMBER
                     ,CG_tmp
 #endif //!CG_NUMBER
+#ifdef _DEBUG_PROFILE_NODE
+                    ,pEx->depth
+                    ,pEx->mCdep
+#endif // !_DEBUG_PROFILE_NODE
             );
             if(dtemp == -1)
             {
@@ -231,7 +292,11 @@ void BED::methyMining(ProfileNode *& pGene)
 double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end, char* ID, bool single_tag, bool ispromoter, bool chain
 #ifdef CG_NUMBER
 , unsigned long long& cg_numb
-#endif // CG_NUMBER
+#endif // !CG_NUMBER
+#ifdef _DEBUG_PROFILE_NODE
+        ,unsigned long long& m_depth
+        ,unsigned long long& m_mCdep
+#endif // !_DEBUG_PROFILE_NODE
 )
 {
     char* pGbeg= nullptr, *pGend= nullptr;
@@ -281,6 +346,8 @@ double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end
             if((*p)=='\n') break;
         p++;
     }
+    m_depth=depth;
+    m_mCdep=mCdep;
     if(depth!=0)
         return (double)((double)mCdep / (double)depth);
     if(mCdep) return -1;
@@ -598,6 +665,7 @@ void BED::init()
     {
         i.base=-1;
         i.length=0;
+        i.edge_base=-1;
     }
     if(!errorExit) errorExit=m_errorExit;
 #ifdef ENABLE_LOG
@@ -817,6 +885,8 @@ void BED::process(const char *gff3file, const char *outputfile, Method m)
                 _outputfile = string(bedname) + string(".gene.txt");
                 saveExternProfile(_outputfile.c_str());
             }
+            _outputfile = string(bedname) + string(".dump");
+            profileNodeDump(_outputfile.c_str(), geneNum, profileList);
 #ifdef SHOW_PROGRESSBAR
             setProgress(100.0f);
 #endif //!SHOW_PROGRESSBAR
@@ -885,6 +955,13 @@ void BED::processTag()
     sprintf(buff,"Building block list");
     initProgress(0.0f, buff);
 #endif //!SHOW_PROGRESSBAR
+    if(LoadTag())
+    {
+        initProgress(100.0f, "Loading chromosome list from file");
+        setProgress(100.0);
+        return;
+    }
+
     readNum=size_file / BLOCK_READ;
     restSize=size_file % BLOCK_READ;
     blockList.resize(size_file / BLOCK_SIZE +1);
@@ -962,7 +1039,7 @@ void BED::processTag()
     }
 
     vector<BlockListNode* >pTmpList;
-    for(int i=1;i<128;i++)
+    for(int i=1;i<MAX_CHR;i++)
         if(chrList[i].base + 1)
             pTmpList.push_back(&(chrList[i]));
     sort(pTmpList.begin(),pTmpList.end(),cmpChrList);
@@ -970,6 +1047,25 @@ void BED::processTag()
         pTmpList[i]->length=pTmpList[i+1]->base-pTmpList[i]->base;
     pTmpList[pTmpList.size()-1]->length=size_file-pTmpList[pTmpList.size()-1]->base;
     pTmpList.clear();
+
+    TagChain();
+}
+
+void BED::TagChain()
+{
+    for(int i=1;i<MAX_CHR;i++)
+    {
+        if(chrList[i].base+1 == 0) continue;
+        char* m_beg=mapped+chrList[i].base;
+        char* m_end=m_beg+chrList[i].length;
+        m_end--;
+        while(true){if((*m_end)!='\n') break; m_end--;}
+        for(int j=0; j<SEARCH_RANGE;j++, m_end--)
+            if(*(m_end)=='\n') break;
+        m_end++;
+        chrList[i].length=m_end-m_beg;
+        dichotomySearchChain(i,m_beg, m_end);
+    }
 }
 
 void BED::savechrList()
@@ -983,30 +1079,53 @@ void BED::savechrList()
         perror("ofstream: ") ;
         errorExit(FILE_SAVE_ERROR);
     }
-    out << "# chr base  length" << endl;
+    out << "# chr base  length edge_base" << endl;
     for(int i=1;i<MAX_CHR-3;i++)
     {
         if(chrList[i].base + 1)
-            out << i << " " << chrList[i].base << " " << chrList[i].length << endl;
-#ifdef __CHR_CHL
-        if(chrList[MAX_CHR-4].base + 1)
-        out << "CH" << " " << chrList[MAX_CHR-3].base << " " << chrList[MAX_CHR-3].length << endl;
-#endif //!__CHR_CHL
+            out << i << " " << chrList[i].base << " " << chrList[i].length << " " << chrList[i].edge_base << endl;
     }
+#ifdef __CHR_CHL
+    if(chrList[MAX_CHR-4].base + 1)
+        out << "CH" << " " << chrList[MAX_CHR-4].base << " " << chrList[MAX_CHR-4].length  << " " << chrList[MAX_CHR-4].edge_base << endl;
+#endif //!__CHR_CHL
     if(chrList[MAX_CHR-3].base + 1)
-        out << "MT" << " " << chrList[MAX_CHR-3].base << " " << chrList[MAX_CHR-3].length << endl;
+        out << "MT" << " " << chrList[MAX_CHR-3].base << " " << chrList[MAX_CHR-3].length << " " << chrList[MAX_CHR-3].edge_base << endl;
 #ifdef __CHR_ZW
     if(chrList[MAX_CHR-2].base + 1)
-        out << "Z" << " " << chrList[MAX_CHR-2].base << " " << chrList[MAX_CHR-2].length << endl;
+        out << "Z" << " " << chrList[MAX_CHR-2].base << " " << chrList[MAX_CHR-2].length << " " << chrList[MAX_CHR-2].edge_base << endl;
     if(chrList[MAX_CHR-1].base + 1)
-        out << "W" << " " << chrList[MAX_CHR-1].base << " " << chrList[MAX_CHR-1].length << endl;
+        out << "W" << " " << chrList[MAX_CHR-1].base << " " << chrList[MAX_CHR-1].length << " " << chrList[MAX_CHR-1].edge_base << endl;
 #else
     if(chrList[MAX_CHR-2].base + 1)
-        out << "X" << " " << chrList[MAX_CHR-2].base << " " << chrList[MAX_CHR-2].length << endl;
+        out << "X" << " " << chrList[MAX_CHR-2].base << " " << chrList[MAX_CHR-2].length << " " << chrList[MAX_CHR-2].edge_base << endl;
     if(chrList[MAX_CHR-1].base + 1)
-        out << "Y" << " " << chrList[MAX_CHR-1].base << " " << chrList[MAX_CHR-1].length << endl;
+        out << "Y" << " " << chrList[MAX_CHR-1].base << " " << chrList[MAX_CHR-1].length << " " << chrList[MAX_CHR-1].edge_base << endl;
 #endif //__CHR_ZW
     out.close();
+}
+
+bool BED::LoadTag()
+{
+    string tagname=bedname;
+    string readbuff;
+    tagname+=".tag";
+    ifstream in(tagname,ios::in);
+    if(!in.is_open()) return false;
+    getline(in, readbuff);
+    while (getline(in, readbuff))
+    {
+        if(readbuff.empty()) continue;
+        unsigned long long base=0, length=0, edge_base=0;
+        char chr_str[0x10]={0};
+        sscanf(readbuff.c_str(), "%s %lld %lld %lld", chr_str, &base, &length, &edge_base);
+        int chr= atoiChr(chr_str);
+        chrList[chr].base=base;
+        chrList[chr].length=length;
+        chrList[chr].edge_base=edge_base;
+    }
+    in.close();
+    return true;
 }
 
 void BED::processProfile(const char *&gff3file)
@@ -1110,6 +1229,7 @@ void BED::saveProfile(const char *nameProfile)
 #ifdef CG_NUMBER
     fprintf(fout,"\tCG");
 #endif //!CG_number
+/*
     if(have_promoter)
     {
         fprintf(fout, "\tPromoter_methy_ratio");
@@ -1117,6 +1237,7 @@ void BED::saveProfile(const char *nameProfile)
         fprintf(fout,"\tCG_promoter");
 #endif //!CG_number
     }
+*/
     fprintf(fout,"\n");
     for(int i=0;i<geneNum;i++)
     {
@@ -1345,8 +1466,6 @@ bool BED::isdigit(int x)
 
 #ifdef ALLOW_PLUG_IN_SAVE
 
-#define _PLUG_IN_TEST
-
 #ifdef _PLUG_IN_TEST
 void ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
 {
@@ -1360,7 +1479,7 @@ void ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
     }
     fprintf(fout,"chr\tID\tStart\tEnd\tStrand\tPromoter_methy_ratio");
 #ifdef CG_NUMBER
-    fprintf(fout, "\tCG");
+    fprintf(fout, "\tCG_promoter");
 #endif //!CG_number
     fprintf(fout, "\n");
 
@@ -1403,17 +1522,18 @@ void ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
                 profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
                 profileList[i]->methy_ratio_promoter);
 #ifdef CG_NUMBER
-        fprintf(fout, "\t%lld", profileList[i]->NumCG);
+        fprintf(fout, "\t%lld", profileList[i]->NumCG_promoter);
 #endif //!CG_number
         fprintf(fout, "\n");
     }
     fclose(fout);
 }
+
 #endif//!_PLUG_IN_TEST
 
 void BED::LoadSavePlugInAndJmp(const char* foutput)
 {
-
+#ifndef _PLUG_IN_TEST
     typedef void (*SaveAs)(const char*, ProfileNode**, int);
 
 #ifdef _UNIX_PLATFORM_
@@ -1436,7 +1556,6 @@ void BED::LoadSavePlugInAndJmp(const char* foutput)
     (*saveas)(foutput, pThis->profileList, pThis->geneNum);
     dlclose(handle);
 #elif defined(_WIN32_PLATFORM_)
-#ifndef _FLAG_TEST
     string plug_in_name="..\\plug-in\\libsave.dll";
     HINSTANCE handle = LoadLibrary(plug_in_name.c_str());
     DWORD x=GetLastError();
@@ -1453,14 +1572,32 @@ void BED::LoadSavePlugInAndJmp(const char* foutput)
     }
     (*saveas)(foutput, pThis->profileList, pThis->geneNum);
     FreeLibrary(handle);
+#endif //!_UNIX_PLATFORM_
+
 #else
     ProfileSave(foutput, pThis->profileList, pThis->geneNum);
-#endif //!_FLAG_TEST
+#endif //!_PLUG_IN_TEST
 
-#endif //!_UNIX_PLATFORM_
 }
 
 #endif //!ALLOW_PLUG_IN_SAVE
+
+void BED::profileNodeDump(const char *name_dump, int n, ProfileNode** pnlist)
+{
+    FILE *pf=fopen(name_dump, "wb");
+    if(pf== nullptr)
+    {
+        perror("fopen(): ");
+        exit(FILE_SAVE_ERROR + 0xd);
+    }
+    fwrite(&(n), sizeof(n), 1, pf);
+    for(int i=0;i<n;i++)
+    {
+        fwrite(pnlist[i], sizeof(ProfileNode), 1, pf);
+    }
+    fclose(pf);
+}
+
 
 void BED::loadSingleList(const char *listfile)
 {

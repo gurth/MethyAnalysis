@@ -66,7 +66,12 @@ namespace bed
         unsigned long long length=0; /* Length of the block. */
     };
 
-    #include "profile_node.h"
+    struct CHRList : BlockListNode
+    {
+        unsigned long long edge_base=0;
+    };
+
+    #include <profile_node.h>
 
     class BED
     {
@@ -111,7 +116,7 @@ namespace bed
         zlog_category_t *zc = nullptr;  /* zlog category, for log file output*/
 #endif //!ENABLE_LOG
         std::vector<BlockListNode>blockList;    /* Block list of bed file. */
-        BlockListNode chrList[MAX_CHR];         /* Chromosome list in the form of blockList. */
+        CHRList chrList[MAX_CHR];         /* Chromosome list in the form of blockList. */
         ProfileNode* profileList[MAX_GENE]={nullptr};
                                         /* Profile list, you can see ProfileNode definition above. */
         std::mutex mtx;          /* Global mutex of thread. */
@@ -162,6 +167,8 @@ namespace bed
              * Please make sure that m_beg and m_end point to the beginning of a line.
              * This function will be executed recursively. */
 
+        static void dichotomySearchChain(int m_chr, char* m_beg, char* m_end);
+
         static void dichotomySearchOffset(char* m_beg, char* m_end, char*& ppos, unsigned long long pos, bool isBeg);
             /* Search interval of a gene in bed file using dichotomy.
              * This function will be executed recursively.
@@ -206,6 +213,10 @@ namespace bed
         #ifdef CG_NUMBER
                     , unsigned long long& cg_numb
         #endif // CG_NUMBER
+        #ifdef _DEBUG_PROFILE_NODE
+                    ,unsigned long long& m_depth
+                    ,unsigned long long& m_mCdep
+        #endif // !_DEBUG_PROFILE_NODE
         );
             /* Get methy ratio.
              * m_beg and m_end are pointers that show the block edge.
@@ -255,7 +266,10 @@ namespace bed
             /* Save single gene information as BED format. */
 
         static void saveSingleData(char* m_beg, char* m_end, char* ID, const char* suffix);
-            /* Save single gene information as BED format. */    
+            /* Save single gene information as BED format. */
+
+        static void profileNodeDump(const char* name_dump, int n, ProfileNode** pnlist);
+            /* Save raw data of profile node. */
 
         static void m_setProgress(double m_progress);
             /* Setting progress of progress bar.*/
@@ -270,6 +284,11 @@ namespace bed
         static inline void LoadSavePlugInAndJmp(const char* foutput);
             /* Load plug in save add execute it.*/
 #endif //!ALLOW_PLUG_IN_SAVE
+
+        bool LoadTag();
+            /* Load chromosome list from file. */
+
+        inline void TagChain();
 
     public:
         static BED* pThis;

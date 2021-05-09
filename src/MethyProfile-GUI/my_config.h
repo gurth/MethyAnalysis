@@ -15,6 +15,10 @@
 #define MAX_INFO 0x800
 /* Maximum length of information in QMessageBox. */
 
-#undef ALLOW_PLUG_IN_SAVE
+#define ALLOW_PLUG_IN_SAVE
+
+#define _PLUG_IN_TEST
+
+#define _DEBUG_PROFILE_NODE
 
 #endif //METHYANALYSIS_MY_CONFIG_H

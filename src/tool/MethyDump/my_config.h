@@ -1,0 +1,10 @@
+//
+// Created by gurth on 5/8/21.
+//
+
+#ifndef METHYANALYSIS_MY_CONFIG_H
+#define METHYANALYSIS_MY_CONFIG_H
+
+#define _DEBUG_PROFILE_NODE
+
+#endif //METHYANALYSIS_MY_CONFIG_H

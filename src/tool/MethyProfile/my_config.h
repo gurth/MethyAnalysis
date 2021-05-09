@@ -10,7 +10,9 @@
 
 #define ALLOW_PLUG_IN_SAVE
 
-#define  _PLUG_IN_TEST
+#define _PLUG_IN_TEST
+
+#define _DEBUG_PROFILE_NODE
 
 //#define ENABLE_LOG
 /* Enable journal output. */

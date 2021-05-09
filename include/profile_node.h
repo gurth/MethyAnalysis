@@ -24,6 +24,10 @@ struct ExternNode : BasicEntry
 {
     ProfileNodeType type = ProfileNodeType::external;   /* Type of this profile node. */
     struct ExternNode* next = nullptr;                  /* Next node on the link list.*/
+#ifdef _DEBUG_PROFILE_NODE
+    unsigned long long depth = 0;
+    unsigned long long mCdep = 0;
+#endif // !_DEBUG_PROFILE_NODE
 };
 
 struct ProfileNode : BasicEntry
@@ -33,10 +37,18 @@ struct ProfileNode : BasicEntry
     ProfileNodeType type = ProfileNodeType::gene;   /* Type of this profile node. */
     char ID[GENE_ID_BUFFER_LENGTH] = {0};           /* ID of the gene. */
     bool single_tag = false;                        /* TRUE when this gene will be analysed singly. */
+    unsigned long long Start_promoter= 0;
+    unsigned long long End_promoter= 0;
 #ifdef CG_NUMBER
     unsigned long long NumCG = 0;            /* CG methylation number. */
     unsigned long long NumCG_promoter = 0;   /* CG methylation number in promoter. */
 #endif// !CG_NUMBER
+#ifdef _DEBUG_PROFILE_NODE
+    unsigned long long depth = 0;
+    unsigned long long mCdep = 0;
+    unsigned long long depth_promoter = 0;
+    unsigned long long mCdep_promoter = 0;
+#endif// !_DEBUG_PROFILE_NODE
     double methy_ratio_promoter = 0.0f;
         /* Methylation ratio of the promoter of this gene. */
     struct ExternNode* next = nullptr;  /* Next node on the link list.*/

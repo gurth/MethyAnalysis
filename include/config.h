@@ -118,6 +118,10 @@
 #define SHOW_PROGRESSBAR
 /* Show the progress bar. */
 
+#define CONTINUOUS_DATA
+
+#define CONSECUTIVE_NEG_FIRST
+
 #include "merror.h"
 
 #endif //!METHYPROFILE_CONFIG_H
