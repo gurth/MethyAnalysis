@@ -59,7 +59,7 @@ void m_Interface::run()
 
     bedfile.process(nullptr, Method::tag);
 
-    sprintf(msg_buff, "Tagging finished.\n\nTotal cost: %.4lf ms\n", bedfile.latest_time_cost);
+    sprintf(msg_buff, "Tagging finished.\n\nTotal cost: %.6lf s\n", bedfile.latest_time_cost);
 
     emit send_msgBox(msg_buff);
 
@@ -67,7 +67,7 @@ void m_Interface::run()
 
     bedfile.process(gff3name, outputname, Method::profile);
 
-    sprintf(msg_buff, "Profile generation finished.\n\nTotal cost: %.4lf ms\n", bedfile.latest_time_cost);
+    sprintf(msg_buff, "Profile generation finished.\n\nTotal cost: %.6lf s\n", bedfile.latest_time_cost);
 
     emit send_msgBox(msg_buff);
 }

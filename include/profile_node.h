@@ -42,6 +42,10 @@ struct ProfileNode : BasicEntry
 #ifdef TYPE_NUMBER
     unsigned long long NumCG = 0;            /* CG methylation number. */
     unsigned long long NumCG_promoter = 0;   /* CG methylation number in promoter. */
+    unsigned long long NumCHG = 0;            /* CG methylation number. */
+    unsigned long long NumCHG_promoter = 0;   /* CG methylation number in promoter. */
+    unsigned long long NumCHH = 0;            /* CG methylation number. */
+    unsigned long long NumCHH_promoter = 0;   /* CG methylation number in promoter. */
 #endif// !TYPE_NUMBER
 #ifdef _DEBUG_PROFILE_NODE
     unsigned long long depth = 0;

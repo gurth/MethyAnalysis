@@ -3,11 +3,11 @@
 //
 
 #include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <time.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cmath>
+#include <chrono>
 #include <vector>
 #include <string>
 #include <set>
@@ -26,7 +26,6 @@
 #ifdef _UNIX_PLATFORM_
 
 #include <sys/mman.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #endif // _UNIX_PLATFORM_
@@ -55,7 +54,7 @@ BED* BED::pThis = nullptr;
 void BED::m_setProgress(double progress)
 {
 #ifdef INDICATOR_PROGRESS_BAR
-    pThis->bar.set_progress(progress);
+    pThis->bar.set_progress((double)progress);
 #endif //!INDICATOR_PROGRESS_BAR
 }
 
@@ -194,8 +193,9 @@ void BED::methyMining(ProfileNode *& pGene)
     char* m_end= nullptr;
     double dtemp=0.0f;
 
-    pGene->NumCG=0;
-    pGene->NumCG_promoter=0;
+    pGene->NumCG=0;   pGene->NumCG_promoter=0;
+    pGene->NumCHG=0;  pGene->NumCHH_promoter=0;
+    pGene->NumCHH=0;  pGene->NumCHH_promoter=0;
     pGene->methy_ratio_promoter=0.0f;
     pGene->methy_ratio=0.0f;
     pGene->mCdep=0;
@@ -221,11 +221,14 @@ void BED::methyMining(ProfileNode *& pGene)
         m_end++;
         if(m_end<m_beg) return;
     }
+#else
+    m_beg=pThis->mapped+pThis->chrList[pGene->chr].base;
+    m_end=m_beg+pThis->chrList[pGene->chr].length;
 #endif //!CONSECUTIVE_NEG_FIRST
 
     dtemp = getMethyRatio(m_beg, m_end, pGene->Start, pGene->End, pGene->ID, pGene->single_tag, false, pGene->chain
 #ifdef TYPE_NUMBER
-            ,pGene->NumCG
+            ,pGene->NumCG, pGene->NumCHG, pGene->NumCHH
 #endif //!TYPE_NUMBER
 #ifdef _DEBUG_PROFILE_NODE
             ,pGene->depth
@@ -249,7 +252,7 @@ void BED::methyMining(ProfileNode *& pGene)
                               , pGene->Start_promoter
                               , pGene->End_promoter, pGene->ID, pGene->single_tag, true, pGene->chain
                     #ifdef TYPE_NUMBER
-                            ,pGene->NumCG_promoter
+                            ,pGene->NumCG_promoter, pGene->NumCHG_promoter, pGene->NumCHH_promoter
                     #endif //!TYPE_NUMBER
                     #ifdef _DEBUG_PROFILE_NODE
                             ,pGene->depth_promoter
@@ -273,11 +276,11 @@ void BED::methyMining(ProfileNode *& pGene)
         {
             if(pEx== nullptr) break;
 #ifdef TYPE_NUMBER
-            unsigned long long CG_tmp = 0;
+            unsigned long long CG_tmp = 0, CHG_tmp = 0, CHH_tmp = 0;
 #endif //!TYPE_NUMBER
             dtemp = getMethyRatio(m_beg, m_end, pEx->Start, pEx->End, nullptr, false, false, pEx->chain
 #ifdef TYPE_NUMBER
-                    ,CG_tmp
+                    ,CG_tmp, CHG_tmp, CHH_tmp
 #endif //!TYPE_NUMBER
 #ifdef _DEBUG_PROFILE_NODE
                     ,pEx->depth
@@ -300,7 +303,9 @@ void BED::methyMining(ProfileNode *& pGene)
 
 double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end, char* ID, bool single_tag, bool ispromoter, bool chain
 #ifdef TYPE_NUMBER
-, unsigned long long& cg_numb
+        , unsigned long long& cg_numb
+        , unsigned long long& chg_numb
+        , unsigned long long& chh_numb
 #endif // !TYPE_NUMBER
 #ifdef _DEBUG_PROFILE_NODE
         ,unsigned long long& m_depth
@@ -312,6 +317,8 @@ double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end
     char* p=nullptr;
 
     cg_numb=0;
+    chh_numb=0;
+    chg_numb=0;
 
     /* Search position. */
     dichotomySearchOffset(m_beg,m_end,pGbeg,p_start,true);
@@ -342,6 +349,8 @@ double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end
 #ifdef TYPE_NUMBER
             p=goFrontItem(p, 1);
             if((*p)=='C' && (*(p+1))=='G') cg_numb++;
+            else if((*p)=='C' && (*(p+1))=='H' && (*(p+2))=='G') chg_numb++;
+            else if((*p)=='C' && (*(p+1))=='H' && (*(p+2))=='H') chh_numb++;
             p=goFrontItem(p, 1);
 #else
             p=goFrontItem(p, 2);
@@ -393,7 +402,7 @@ void BED::pthFuncRaw()
 
 #ifdef INDICATOR_PROGRESS_BAR
     char buff[0x30];
-    sprintf(buff,"Processed %lld / %lld",pThis->sum,pThis->size_file);
+    sprintf(buff,"Processed %lld / %zu",pThis->sum,pThis->size_file);
     MUTEX_LOCK(
         pThis->progress+=pThis->progUnit;
         pThis->bar.set_option(indicators::option::PostfixText{buff});
@@ -716,7 +725,7 @@ char *BED::open_map(const char *filename, size_t &length,
 #elif defined(_WIN32_PLATFORM_)
         HANDLE& m_handle, HANDLE& m_handleMap
 #endif //!_UNIX_PLATFORM_
-)
+) const
 {
     char* p_m= nullptr;
 #ifdef _UNIX_PLATFORM_
@@ -803,7 +812,7 @@ void BED::unmap_close(size_t& length, char* p_m,
 #elif defined(_WIN32_PLATFORM_)
         HANDLE& m_handle, HANDLE& m_handleMap
 #endif //!_UNIX_PLATFORM_
-)
+) const
 {
 #ifdef _UNIX_PLATFORM_
     if(munmap(p_m,length))
@@ -865,8 +874,7 @@ void BED::processInit()
 
 void BED::process(const char *gff3file, const char *outputfile, Method m)
 {
-    clock_t t;
-    t=clock();
+    auto t_start = chrono::system_clock::now();
     string _outputfile;
 
     processInit();
@@ -905,9 +913,10 @@ void BED::process(const char *gff3file, const char *outputfile, Method m)
     }
 
     printf("\n");
-    t = clock() - t;
-    latest_time_cost= ((float)t) / CLOCKS_PER_SEC * 1000;
-    printf("Total cost: %lf ms\n", latest_time_cost);
+    auto t_end = chrono::system_clock::now();
+
+    latest_time_cost= (double)((double)chrono::duration_cast<chrono::microseconds>(t_end - t_start).count() * (double)chrono::microseconds::period::num / (double)chrono::microseconds::period::den);
+    printf("Total cost: %.6lf s\n", latest_time_cost);
 }
 
 void BED::processRaw()
@@ -923,7 +932,7 @@ void BED::processRaw()
     readNum=size_file / BLOCK_READ;
     restSize=size_file % BLOCK_READ;
 #ifdef SHOW_PROGRESSBAR
-    progUnit=(double)(100.0 / (size_file / BLOCK_SIZE +1));
+    progUnit=(double)(100.0 / ((double)size_file / BLOCK_SIZE +1.0));
     sprintf(buff,"Processed 0 / %ld",size_file);
     initProgress(0.0f, buff);
 #endif //!SHOW_PROGRESSBAR
@@ -977,7 +986,7 @@ void BED::processTag()
 
     base_offset=0;
     nodeNum = 0;
-    progUnit=(double)(25.0 / blockList.size());
+    progUnit=(double)(25.0 / (double)blockList.size());
 
     for(size_t j=0; j<=readNum; j++, base_offset+=BLOCK_READ)
     {
@@ -1026,7 +1035,7 @@ void BED::processTag()
 
     nodeNum = 0;
     base_offset=0;
-    progUnit=(double)((100.0 - progress) / blockList.size());
+    progUnit=(double)((100.0 - progress) / (double)blockList.size());
 
     for(size_t j=0; j<=readNum; j++, base_offset+=BLOCK_READ)
     {
@@ -1074,6 +1083,9 @@ void BED::TagChain()
         m_end++;
         chrList[i].length=m_end-m_beg;
         dichotomySearchChain(i,m_beg, m_end);
+
+        if(!(chrList[i].edge_base+1))
+            chrList[i].edge_base=chrList[i].base;
     }
 }
 
@@ -1159,7 +1171,7 @@ void BED::processProfile(const char *&gff3file)
     sprintf(buff,"Indexing");
     initProgress(0.0f, buff);
     progress=0;
-    progUnit=(double)(25.0 / (size_fileIndex / BLOCK_SIZE_INDEX +1));
+    progUnit=(double)(25.0 / ((double)size_fileIndex / BLOCK_SIZE_INDEX +1.0));
 #endif //!SHOW_PROGRESSBAR
 
     readNum=size_fileIndex / BLOCK_READ_INDEX;
@@ -1236,7 +1248,7 @@ void BED::saveProfile(const char *nameProfile)
     }
     fprintf(fout,"chr\tID\tStart\tEnd\tStrand\tMethy_ratio");
 #ifdef TYPE_NUMBER
-    fprintf(fout,"\tCG");
+    fprintf(fout,"\tCG\tCHG\tCHH");
 #endif //!TYPE_NUMBER
 /*
     if(have_promoter)
@@ -1285,7 +1297,7 @@ void BED::saveProfile(const char *nameProfile)
                 profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
                 profileList[i]->methy_ratio);
 #ifdef TYPE_NUMBER
-        fprintf(fout, "\t%lld", profileList[i]->NumCG);
+        fprintf(fout, "\t%lld\t%lld\t%lld", profileList[i]->NumCG, profileList[i]->NumCHG, profileList[i]->NumCHH);
 #endif //!TYPE_NUMBER
 /*
         if (have_promoter)
@@ -1488,7 +1500,7 @@ void ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
     }
     fprintf(fout,"chr\tID\tStart\tEnd\tStrand\tPromoter_methy_ratio");
 #ifdef TYPE_NUMBER
-    fprintf(fout, "\tCG_promoter");
+    fprintf(fout, "\tCG_promoter\tCHG_promoter\tCHH_promoter");
 #endif //!TYPE_NUMBER
     fprintf(fout, "\n");
 
@@ -1534,7 +1546,7 @@ void ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
                 profileList[i]->Start_promoter, profileList[i]->End_promoter, (profileList[i]->chain) ? '+' : '-',
                 profileList[i]->methy_ratio_promoter);
 #ifdef TYPE_NUMBER
-        fprintf(fout, "\t%lld", profileList[i]->NumCG_promoter);
+        fprintf(fout, "\t%lld\t%lld\t%lld", profileList[i]->NumCG_promoter, profileList[i]->NumCHG_promoter, profileList[i]->NumCHH_promoter);
 #endif //!TYPE_NUMBER
         fprintf(fout, "\n");
     }

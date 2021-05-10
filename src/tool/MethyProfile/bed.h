@@ -9,7 +9,7 @@
 #define METHYPROFILE_BED_H
 
 #include <sys/stat.h>
-#include <limits.h>
+#include <climits>
 #include <thread>
 #include <mutex>
 #include <vector>
@@ -76,7 +76,7 @@ namespace bed
     class BED
     {
     private:
-        char bedname[BED_MAX_PATH];         /* Bed file name. */
+        char bedname[BED_MAX_PATH] = {0};         /* Bed file name. */
         char *mapped= nullptr;          /* Bed file mapped location. */
         char *mappedIndex = nullptr;    /* GFF3 file mapped location. */
         unsigned long long base_offset=0;    /* Base offset of every loop. */
@@ -133,7 +133,7 @@ namespace bed
 #elif defined(_WIN32_PLATFORM_)
         HANDLE& m_handle, HANDLE& m_handleMap
 #endif //!_UNIX_PLATFORM_
-        );
+        ) const;
             /* Open and map file in memory.  */
 
         void unmap_close(size_t& length, char* p_m,
@@ -142,7 +142,7 @@ namespace bed
 #elif defined(_WIN32_PLATFORM_)
         HANDLE& m_handle, HANDLE& m_handleMap
 #endif //!_UNIX_PLATFORM_
-                         );
+                         ) const;
             /* Unmap and close file*/
 
         inline void processRaw();
@@ -212,6 +212,8 @@ namespace bed
                                            bool single_tag, bool ispromoter, bool chain
         #ifdef TYPE_NUMBER
                     , unsigned long long& cg_numb
+                    , unsigned long long& chg_numb
+                    , unsigned long long& chh_numb
         #endif // TYPE_NUMBER
         #ifdef _DEBUG_PROFILE_NODE
                     ,unsigned long long& m_depth
@@ -312,8 +314,8 @@ namespace bed
             /* Time cost of latest operation. */
     public:
         BED();                  /* Constructor without opening and mapping file.*/
-        BED(char *bedfile);     /* Constructor with opening and mapping file.*/
-        BED(p_errorExit m_errorEx); /* Constructor with outside error parsing. */
+        explicit BED(char *bedfile);     /* Constructor with opening and mapping file.*/
+        explicit BED(p_errorExit m_errorEx); /* Constructor with outside error parsing. */
         void bedfileOpen(const char* bedfile);
             /* Open bed file an map it to memory. */
 
