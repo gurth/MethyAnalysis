@@ -194,6 +194,15 @@ void BED::methyMining(ProfileNode *& pGene)
     char* m_end= nullptr;
     double dtemp=0.0f;
 
+    pGene->NumCG=0;
+    pGene->NumCG_promoter=0;
+    pGene->methy_ratio_promoter=0.0f;
+    pGene->methy_ratio=0.0f;
+    pGene->mCdep=0;
+    pGene->depth=0;
+    pGene->mCdep_promoter=0;
+    pGene->depth_promoter=0;
+
 #ifdef CONSECUTIVE_NEG_FIRST
     if(pGene->chain)
     {
@@ -215,9 +224,9 @@ void BED::methyMining(ProfileNode *& pGene)
 #endif //!CONSECUTIVE_NEG_FIRST
 
     dtemp = getMethyRatio(m_beg, m_end, pGene->Start, pGene->End, pGene->ID, pGene->single_tag, false, pGene->chain
-#ifdef CG_NUMBER
+#ifdef TYPE_NUMBER
             ,pGene->NumCG
-#endif //!CG_NUMBER
+#endif //!TYPE_NUMBER
 #ifdef _DEBUG_PROFILE_NODE
             ,pGene->depth
             ,pGene->mCdep
@@ -239,9 +248,9 @@ void BED::methyMining(ProfileNode *& pGene)
         dtemp = getMethyRatio(m_beg, m_end
                               , pGene->Start_promoter
                               , pGene->End_promoter, pGene->ID, pGene->single_tag, true, pGene->chain
-                    #ifdef CG_NUMBER
+                    #ifdef TYPE_NUMBER
                             ,pGene->NumCG_promoter
-                    #endif //!CG_NUMBER
+                    #endif //!TYPE_NUMBER
                     #ifdef _DEBUG_PROFILE_NODE
                             ,pGene->depth_promoter
                             ,pGene->mCdep_promoter
@@ -263,13 +272,13 @@ void BED::methyMining(ProfileNode *& pGene)
         while (true)
         {
             if(pEx== nullptr) break;
-#ifdef CG_NUMBER
+#ifdef TYPE_NUMBER
             unsigned long long CG_tmp = 0;
-#endif //!CG_NUMBER
+#endif //!TYPE_NUMBER
             dtemp = getMethyRatio(m_beg, m_end, pEx->Start, pEx->End, nullptr, false, false, pEx->chain
-#ifdef CG_NUMBER
+#ifdef TYPE_NUMBER
                     ,CG_tmp
-#endif //!CG_NUMBER
+#endif //!TYPE_NUMBER
 #ifdef _DEBUG_PROFILE_NODE
                     ,pEx->depth
                     ,pEx->mCdep
@@ -290,9 +299,9 @@ void BED::methyMining(ProfileNode *& pGene)
 }
 
 double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end, char* ID, bool single_tag, bool ispromoter, bool chain
-#ifdef CG_NUMBER
+#ifdef TYPE_NUMBER
 , unsigned long long& cg_numb
-#endif // !CG_NUMBER
+#endif // !TYPE_NUMBER
 #ifdef _DEBUG_PROFILE_NODE
         ,unsigned long long& m_depth
         ,unsigned long long& m_mCdep
@@ -330,13 +339,13 @@ double BED::getMethyRatio(char *m_beg, char *m_end, size_t p_start, size_t p_end
         p=goFrontItem(p,3);
         if((*p == '+') == (chain))
         {
-#ifdef CG_NUMBER
+#ifdef TYPE_NUMBER
             p=goFrontItem(p, 1);
             if((*p)=='C' && (*(p+1))=='G') cg_numb++;
             p=goFrontItem(p, 1);
 #else
             p=goFrontItem(p, 2);
-#endif //!CG_NUMBER
+#endif //!TYPE_NUMBER
 
             depth+=atoi(p);
             p=goFrontItem(p,1);
@@ -1226,16 +1235,16 @@ void BED::saveProfile(const char *nameProfile)
         errorExit(FILE_SAVE_ERROR + 0xA);
     }
     fprintf(fout,"chr\tID\tStart\tEnd\tStrand\tMethy_ratio");
-#ifdef CG_NUMBER
+#ifdef TYPE_NUMBER
     fprintf(fout,"\tCG");
-#endif //!CG_number
+#endif //!TYPE_NUMBER
 /*
     if(have_promoter)
     {
         fprintf(fout, "\tPromoter_methy_ratio");
-#ifdef CG_NUMBER
+#ifdef TYPE_NUMBER
         fprintf(fout,"\tCG_promoter");
-#endif //!CG_number
+#endif //!TYPE_NUMBER
     }
 */
     fprintf(fout,"\n");
@@ -1275,16 +1284,16 @@ void BED::saveProfile(const char *nameProfile)
         fprintf(fout, "%s\t%s\t%lld\t%lld\t%c\t%.15lf", str_chr.c_str(), profileList[i]->ID,
                 profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
                 profileList[i]->methy_ratio);
-#ifdef CG_NUMBER
+#ifdef TYPE_NUMBER
         fprintf(fout, "\t%lld", profileList[i]->NumCG);
-#endif //!CG_number
+#endif //!TYPE_NUMBER
 /*
         if (have_promoter)
         {
             fprintf(fout, "\t%.15lf", profileList[i]->methy_ratio_promoter);
-#ifdef CG_NUMBER
+#ifdef TYPE_NUMBER
             fprintf(fout, "\t%ld", profileList[i]->NumCG_promoter);
-#endif //!CG_number
+#endif //!TYPE_NUMBER
         }
 */
         fprintf(fout, "\n");
@@ -1478,14 +1487,17 @@ void ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
         exit(FILE_SAVE_ERROR + 0xA);
     }
     fprintf(fout,"chr\tID\tStart\tEnd\tStrand\tPromoter_methy_ratio");
-#ifdef CG_NUMBER
+#ifdef TYPE_NUMBER
     fprintf(fout, "\tCG_promoter");
-#endif //!CG_number
+#endif //!TYPE_NUMBER
     fprintf(fout, "\n");
 
     for(int i=0;i<n;i++)
     {
         if (fabs(profileList[i]->methy_ratio) <= 1e-15) continue;
+#ifdef _DEBUG_PROFILE_NODE
+        if(profileList[i]->mCdep_promoter == 0) continue;
+#endif //!_DEBUG_PROFILE_NODE
         char str_chr[0x10];
         switch (profileList[i]->chr)
         {
@@ -1519,11 +1531,11 @@ void ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
         char buff[0x30];
         sprintf(buff, "%s_promoter", profileList[i]->ID);
         fprintf(fout, "%s\t%s\t%lld\t%lld\t%c\t%.15lf", str_chr, buff,
-                profileList[i]->Start, profileList[i]->End, (profileList[i]->chain) ? '+' : '-',
+                profileList[i]->Start_promoter, profileList[i]->End_promoter, (profileList[i]->chain) ? '+' : '-',
                 profileList[i]->methy_ratio_promoter);
-#ifdef CG_NUMBER
+#ifdef TYPE_NUMBER
         fprintf(fout, "\t%lld", profileList[i]->NumCG_promoter);
-#endif //!CG_number
+#endif //!TYPE_NUMBER
         fprintf(fout, "\n");
     }
     fclose(fout);

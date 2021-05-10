@@ -210,9 +210,9 @@ namespace bed
 
         static inline double getMethyRatio(char* m_beg, char* m_end, size_t p_start, size_t p_end, char* ID,
                                            bool single_tag, bool ispromoter, bool chain
-        #ifdef CG_NUMBER
+        #ifdef TYPE_NUMBER
                     , unsigned long long& cg_numb
-        #endif // CG_NUMBER
+        #endif // TYPE_NUMBER
         #ifdef _DEBUG_PROFILE_NODE
                     ,unsigned long long& m_depth
                     ,unsigned long long& m_mCdep

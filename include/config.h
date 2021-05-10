@@ -89,8 +89,8 @@
  * profile. If you not sure about this, please ture it down.
  * */
 
-#define CG_NUMBER
-/* Define this when you want to save CG number in profile.
+#define TYPE_NUMBER
+/* Define this when you want to save CG, CHH and so on number in profile.
  * */
 
 #define GENE_ID_BUFFER_LENGTH 0x20

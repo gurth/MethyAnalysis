@@ -39,10 +39,10 @@ struct ProfileNode : BasicEntry
     bool single_tag = false;                        /* TRUE when this gene will be analysed singly. */
     unsigned long long Start_promoter= 0;
     unsigned long long End_promoter= 0;
-#ifdef CG_NUMBER
+#ifdef TYPE_NUMBER
     unsigned long long NumCG = 0;            /* CG methylation number. */
     unsigned long long NumCG_promoter = 0;   /* CG methylation number in promoter. */
-#endif// !CG_NUMBER
+#endif// !TYPE_NUMBER
 #ifdef _DEBUG_PROFILE_NODE
     unsigned long long depth = 0;
     unsigned long long mCdep = 0;

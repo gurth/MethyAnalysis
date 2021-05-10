@@ -94,7 +94,7 @@ else()
         set(MY_WINRES "${CMAKE_CURRENT_SOURCE_DIR}/main.res")
         add_custom_command(OUTPUT main.res
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/
-            COMMAND ${CMAKE_COMMAND} -E windres -i main.rc --input-format=rc -o main.rc -O coff
+            COMMAND ${CMAKE_COMMAND} -E windres -i ${MY_WINRC} --input-format=rc -o ${MY_WINRES} -O coff
             COMMENT "Building res file."
             )
         add_executable(MethyProfile-GUI
