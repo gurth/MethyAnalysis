@@ -1262,7 +1262,12 @@ void BED::saveProfile(const char *nameProfile)
     fprintf(fout,"\n");
     for(int i=0;i<geneNum;i++)
     {
-        if (fabs(profileList[i]->methy_ratio) <= 1e-15) continue;
+        if (fabs(profileList[i]->methy_ratio) <= 1e-15)
+#ifdef ZERO_NODE_NOT_REPORT
+            continue;
+#else
+        profileList[i]->methy_ratio=0.0f;
+#endif //!ZERO_NODE_NOT_REPORT
         string str_chr;
         switch (profileList[i]->chr)
         {
@@ -1325,7 +1330,11 @@ void BED::saveExternProfile(const char *nameProfileEx)
     fprintf(fout,"\n");
     for(int i=0;i<geneNum;i++)
     {
-        if (fabs(profileList[i]->methy_ratio) <= 1e-15 || !profileList[i]->single_tag) continue;
+        if (
+#ifdef ZERO_NODE_NOT_REPORT
+                fabs(profileList[i]->methy_ratio) <= 1e-15 ||
+#endif //!ZERO_NODE_NOT_REPORT
+        !profileList[i]->single_tag) continue;
         string str_chr;
         switch (profileList[i]->chr)
         {
@@ -1506,9 +1515,15 @@ void ProfileSave(const char* nameProfile, ProfileNode** profileList, int n)
 
     for(int i=0;i<n;i++)
     {
-        if (fabs(profileList[i]->methy_ratio) <= 1e-15) continue;
+        if (fabs(profileList[i]->methy_ratio_promoter) <= 1e-15)
+#ifdef ZERO_NODE_NOT_REPORT
+        continue;
+#else
+        profileList[i]->methy_ratio_promoter=0.0f;
+#endif //!ZERO_NODE_NOT_REPORT
+
 #ifdef _DEBUG_PROFILE_NODE
-        if(profileList[i]->mCdep_promoter == 0) continue;
+            if(profileList[i]->mCdep_promoter == 0) continue;
 #endif //!_DEBUG_PROFILE_NODE
         char str_chr[0x10];
         switch (profileList[i]->chr)

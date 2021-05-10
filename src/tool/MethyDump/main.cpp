@@ -7,20 +7,19 @@
 #include "my_config.h"
 #include <profile_node.h>
 
-
 using namespace std;
 
 void ProfileSave(const char* nameProfile, ProfileNode* profileList, int n)
 {
     char name_buff[PATH_MAX];
-    sprintf(name_buff, "%s.pro.txt", nameProfile);
+    sprintf(name_buff, "%s.x.txt", nameProfile);
     FILE* fout=fopen(name_buff,"w");
     if(fout== nullptr)
     {
         perror("fopen(): ");
         exit(FILE_SAVE_ERROR + 0xA);
     }
-    fprintf(fout,"chr\tID\tStart\tEnd\tStrand\tPromoter_methy_ratio");
+    fprintf(fout,"chr\tID\tStart\tEnd\tStrand\tMethy_ratio");
 #ifdef CG_NUMBER
     fprintf(fout, "\tCG_promoter");
 #endif //!CG_number
@@ -28,7 +27,12 @@ void ProfileSave(const char* nameProfile, ProfileNode* profileList, int n)
 
     for(int i=0;i<n;i++)
     {
-        if (fabs(profileList[i].methy_ratio) <= 1e-15) continue;
+        if (fabs(profileList[i].methy_ratio) <= 1e-15)
+#ifdef ZERO_NODE_NOT_REPORT
+            continue;
+#else
+        profileList[i].methy_ratio=0.0f;
+#endif //!ZERO_NODE_NOT_REPORT
         char str_chr[0x10];
         switch (profileList[i].chr)
         {
@@ -63,7 +67,7 @@ void ProfileSave(const char* nameProfile, ProfileNode* profileList, int n)
         sprintf(buff, "%s_promoter", profileList[i].ID);
         fprintf(fout, "%s\t%s\t%lld\t%lld\t%c\t%.15lf", str_chr, buff,
                 profileList[i].Start, profileList[i].End, (profileList[i].chain) ? '+' : '-',
-                profileList[i].methy_ratio_promoter);
+                profileList[i].methy_ratio);
 #ifdef CG_NUMBER
         fprintf(fout, "\t%lld", profileList[i].NumCG_promoter);
 #endif //!CG_number
@@ -93,6 +97,8 @@ int main(int argc, char*argv[])
     profileList=(ProfileNode*) malloc(sizeof(ProfileNode)*len);
     fread(profileList, sizeof(ProfileNode)*len, 1, pf);
     fclose(pf);
-    ProfileSave("a.txt",profileList, len);
+    char name_buff[NAME_MAX]={0};
+    sprintf(name_buff, "%s.1.txt", argv[1]);
+    ProfileSave(name_buff,profileList, len);
     return 0;
 }

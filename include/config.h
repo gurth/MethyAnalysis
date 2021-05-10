@@ -118,9 +118,9 @@
 #define SHOW_PROGRESSBAR
 /* Show the progress bar. */
 
-#define CONTINUOUS_DATA
-
 #define CONSECUTIVE_NEG_FIRST
+
+#define ZERO_NODE_NOT_REPORT
 
 #include "merror.h"
 
